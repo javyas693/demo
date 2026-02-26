@@ -17,6 +17,8 @@ def build_sidebar_inputs() -> dict:
         label_visibility="collapsed",
     )
 
+    st.sidebar.write("DEBUG analysis_mode:", analysis_mode)
+
     # Defaults so app.py can always read them safely
     params = {
         "ticker": ticker,
@@ -38,7 +40,7 @@ def build_sidebar_inputs() -> dict:
         "min_call_loss_to_trigger": 400.0,
 
         # NEW: trigger for tax-neutral reduction (0.10 = 10%)
-        "share_reduction_trigger_pct": 0.0,
+        "share_reduction_trigger_pct": 0.50,
     }
 
     if analysis_mode == "Unwind Strategy":
@@ -120,16 +122,15 @@ def build_sidebar_inputs() -> dict:
 
         # --- NEW trigger for tax-neutral reduction ---
         st.sidebar.subheader("Tax-Neutral Reduction Trigger")
-        params["share_reduction_trigger_pct"] = (
-            st.sidebar.slider(
-                "Sell shares only if price is up by at least (%) vs cost basis",
-                min_value=0.0,
-                max_value=50.0,
-                value=0.0,
-                step=1.0,
-                key="share_reduction_trigger_pct",
-            ) / 100.0
+        trigger_pct_ui = st.sidebar.slider(
+            "Sell shares only if price is up by at least (%) vs cost basis",
+            min_value=0.0,
+            max_value=50.0,
+            value=50.0,
+            step=1.0,
+            key="share_reduction_trigger_pct_ui",  # <- NEW KEY
         )
+        params["share_reduction_trigger_pct"] = trigger_pct_ui / 100.0
 
         # --- Optional scheduled reduction rules (engine supports these) ---
         st.sidebar.subheader("Other Reduction Rules")

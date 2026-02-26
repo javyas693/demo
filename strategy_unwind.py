@@ -45,7 +45,7 @@ import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
 
-
+from core.tax_neutral import handle_option_loss_tax_neutral_single_lot
 # -----------------------------
 # Data structures
 # -----------------------------
@@ -283,64 +283,36 @@ class StrategyUnwindEngine:
         return ""
 
     def _handle_option_loss_tax_neutral_single_lot(
-        self,
-        state: OverlayState,
-        option_loss_abs: float,
-        current_price: float,
-        share_reduction_trigger_pct: float,
+            self,
+            state: OverlayState,
+            option_loss_abs: float,
+            current_price: float,
+            share_reduction_trigger_pct: float,
     ) -> int:
-        """
-        NEW behavior:
-        - Only sell shares if current_price >= cost_basis * (1 + trigger_pct)
-        - Sell enough shares so realized stock gain ~= option loss:
-            shares_to_sell = floor(option_loss / (price - basis))
-        - Taxes: stock gains LT (added to cumulative_taxes)
-        - TLH: if not triggered, TLH += option_loss
-               if triggered, TLH += max(0, option_loss - realized_stock_gain)  (usually small remainder)
-        Returns shares_sold (int).
-        """
-        option_loss_abs = float(option_loss_abs)
-        current_price = float(current_price)
+        result, new_shares, new_cash, tlh_delta = handle_option_loss_tax_neutral_single_lot(
+            shares=state.shares,
+            cost_basis=state.cost_basis,
+            cash=state.cash,
+            option_loss_abs=option_loss_abs,
+            current_price=current_price,
+            share_reduction_trigger_pct=share_reduction_trigger_pct,
+        )
 
-        trigger_price = state.cost_basis * (1.0 + float(share_reduction_trigger_pct))
-        trigger_met = current_price >= trigger_price
+        # Update state from returned values
+        state.shares = float(new_shares)
+        state.cash = float(new_cash)
 
-        if not trigger_met:
-            # Income generation + TLH only; no share selling.
-            state.cumulative_tlh += option_loss_abs
-            return 0
+        # Realized stock gain (used for reporting + taxes)
+        if result.realized_stock_gain > 0:
+            state.realized_stock_gain += float(result.realized_stock_gain)
+            state.cumulative_taxes += (float(result.realized_stock_gain) * self.long_term_tax_rate
+            )
 
-        gain_per_share = current_price - state.cost_basis
-        if gain_per_share <= 0:
-            state.cumulative_tlh += option_loss_abs
-            return 0
+        # TLH delta from handler
+        if tlh_delta > 0:
+            state.cumulative_tlh += float(tlh_delta)
 
-        shares_to_sell = int(floor(option_loss_abs / gain_per_share))
-        shares_to_sell = min(shares_to_sell, int(state.shares))
-
-        if shares_to_sell <= 0:
-            # If loss is too small relative to gain/share, do nothing; TLH carries.
-            state.cumulative_tlh += option_loss_abs
-            return 0
-
-        realized_stock_gain = shares_to_sell * gain_per_share
-        stock_sale_proceeds = shares_to_sell * current_price
-
-        # Update state
-        state.shares -= float(shares_to_sell)
-        state.cash += stock_sale_proceeds
-        state.realized_stock_gain += realized_stock_gain
-
-        # Taxes on realized LT gain
-        state.cumulative_taxes += realized_stock_gain * self.long_term_tax_rate
-
-        # Any leftover loss becomes TLH (usually small remainder)
-        remainder_loss = option_loss_abs - realized_stock_gain
-        if remainder_loss > 0:
-            state.cumulative_tlh += remainder_loss
-
-        return shares_to_sell
-
+        return int(result.shares_sold)
     # -----------------------------
     # Covered call overlay (v1 + new trigger logic)
     # -----------------------------
@@ -368,6 +340,13 @@ class StrategyUnwindEngine:
         profit_capture_pct: float = 0.50,
         stop_loss_multiple: float = 1.00,
         extrinsic_threshold_pct: float = 0.05,
+
+        # Reporting counters (v1)
+        total_realized_option_loss=0.0,
+        total_shares_sold_on_call_loss = 0,
+
+        total_realized_option_pnl = 0.0,
+        audit_log: list[str] = [],
         cash_return_mode: str = "underlying",  # v1: cash grows at underlying return
     ) -> Dict[str, Any]:
         df = self.price_data.copy()
@@ -502,7 +481,7 @@ class StrategyUnwindEngine:
                         loss_amt = abs(realized_option_pnl)
                         total_realized_option_loss += loss_amt
 
-                        # NEW: TLH tracked as dollars; tax-neutral share sell only under trigger
+                        # Run the trigger/sell handler FIRST
                         shares_sold = self._handle_option_loss_tax_neutral_single_lot(
                             state=state,
                             option_loss_abs=loss_amt,
@@ -510,6 +489,21 @@ class StrategyUnwindEngine:
                             share_reduction_trigger_pct=share_reduction_trigger_pct,
                         )
                         total_shares_sold_on_call_loss += int(shares_sold)
+
+                        # Now log what actually happened
+                        action = "SELL" if int(shares_sold) > 0 else "NO-SELL"
+                        audit_log.append(
+                            f"{date.date()} | {exit_reason} | {action} | "
+                            f"opt_loss=${loss_amt:,.0f} | "
+                            f"px=${current_price:,.2f} | "
+                            f"basis=${state.cost_basis:,.2f} | "
+                            f"trigger={share_reduction_trigger_pct:.2%} | "
+                            f"shares_sold={int(shares_sold)} | "
+                            f"taxes=${state.cumulative_taxes:,.0f} | "
+                            f"tlh=${state.cumulative_tlh:,.0f}"
+                        )
+
+
 
                         # (enable_tax_loss_harvest is kept for UI compatibility; TLH is tracked regardless)
                         # If you want to “turn off TLH tracking” when disabled:
@@ -646,6 +640,7 @@ class StrategyUnwindEngine:
             # Basis + trigger echo (MVP)
             "cost_basis_single_lot": float(state.cost_basis),
             "share_reduction_trigger_pct": float(share_reduction_trigger_pct),
+            "audit_log": audit_log,
         
             # Debug (safe)
             "__debug_code_fingerprint__": "FINGERPRINT_2026_02_23_A",

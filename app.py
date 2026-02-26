@@ -89,6 +89,13 @@ st.session_state.setdefault("last_run", {"mode": None, "ticker": None, "start": 
 # Sidebar params (includes analyze_button)
 params = build_sidebar_inputs()
 
+st.sidebar.write("DEBUG state ui trigger:",
+                 st.session_state.get("share_reduction_trigger_pct_ui"))
+st.sidebar.write("DEBUG state old trigger:",
+                 st.session_state.get("share_reduction_trigger_pct"))
+st.sidebar.write("DEBUG params trigger:",
+                 params.get("share_reduction_trigger_pct"))
+
 # -------------------------
 # Run analysis ONLY when Analyze clicked
 # -------------------------
@@ -203,6 +210,17 @@ else:
     summary_b = baseline.get("summary", {}) or {}
     summary_o_raw = overlay.get("summary", {}) or {}
     summary_o = overlay_summary_adapter(summary_o_raw)
+
+    # --- Audit Log (short) ---
+    audit_log = summary_o_raw.get("audit_log", []) or []
+
+    if audit_log:
+        with st.expander("🔎 Tax-Neutral Reduction Audit Log", expanded=False):
+            for line in audit_log[-200:]:  # show last 200 lines max
+                st.text(line)
+    else:
+        # optional: keep silent if none
+        pass
 
     # Temporary: schema debug (remove once stable)
     # st.write("Overlay summary keys:", list(summary_o_raw.keys()))
