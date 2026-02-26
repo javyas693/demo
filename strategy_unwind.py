@@ -45,7 +45,7 @@ import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
 
-from core.tax_neutral import handle_option_loss_tax_neutral_single_lot
+from ai_advisory.strategy.tax_neutral import handle_option_loss_tax_neutral_single_lot
 # -----------------------------
 # Data structures
 # -----------------------------
@@ -498,6 +498,7 @@ class StrategyUnwindEngine:
                             f"px=${current_price:,.2f} | "
                             f"basis=${state.cost_basis:,.2f} | "
                             f"trigger={share_reduction_trigger_pct:.2%} | "
+                            f"trigger_px=${state.cost_basis * (1 + share_reduction_trigger_pct):,.2f} | "
                             f"shares_sold={int(shares_sold)} | "
                             f"taxes=${state.cumulative_taxes:,.0f} | "
                             f"tlh=${state.cumulative_tlh:,.0f}"
