@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 from ai_advisory.models.model_portfolio import ModelPortfolio
 from ai_advisory.allocation.rounding import round_quantity
+
+from ai_advisory.core.frontier_status import FrontierStatus
+from ai_advisory.frontier.store.fs_store import FileSystemFrontierStore
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,10 @@ def allocate_cash_to_model(
     min_trade_notional: Decimal = Decimal("250.00"),  # Phase 1 later changes to $250
     allow_fractional: bool = True,
     fractional_dp: int = 6,
+    # Patch 6C (optional): execution gating against approved frontier
+    frontier_store: Optional[FileSystemFrontierStore] = None,
+    frontier_version: Optional[str] = None,
+    model_id: Optional[str] = None,
 ) -> List[BuyIntent]:
     """
     Phase 1 minimal:
@@ -38,8 +45,29 @@ def allocate_cash_to_model(
     - Round shares properly
     - Emit buy_fill
     - Update PortfolioState through ledger application
+
+    Patch 6C (optional):
+    - If frontier_store + frontier_version are provided, require the frontier be APPROVED
+      before executing any fills.
     """
     model_portfolio.validate()
+
+    # --- Patch 6C: status gate (only if caller supplies frontier context)
+    if frontier_store is not None and frontier_version is not None:
+        status = frontier_store.get_status(as_of, frontier_version)
+        if status != FrontierStatus.APPROVED:
+            raise AllocationError(
+                f"Execution blocked: frontier_version={frontier_version} status={status.value}. "
+                f"Must be APPROVED."
+            )
+        # optional safety: also ensure the frontier matches model_id if provided
+        if model_id is not None:
+            meta = frontier_store._read_meta(as_of, frontier_version)  # internal read ok for now
+            meta_model = meta.get("model_id")
+            if meta_model and meta_model != model_id:
+                raise AllocationError(
+                    f"Execution blocked: frontier model_id mismatch. meta.model_id={meta_model} expected={model_id}"
+                )
 
     cash = _get_total_cash(PortfolioState)
     if cash <= 0:
@@ -95,8 +123,6 @@ def allocate_cash_to_model(
     for i, intent in enumerate(intents):
         idempotency_key = f"{run_id}:buy_fill:{i}:{intent.symbol}"
 
-        # IMPORTANT: adapt only the METHOD NAME + PARAMS to match your ledger engine.
-        # Terminology stays: buy_fill
         ledger.buy_fill(
             PortfolioState=PortfolioState,
             symbol=intent.symbol,
@@ -114,7 +140,7 @@ def _get_total_cash(PortfolioState) -> Decimal:
     """
     Adapter layer so allocate module stays decoupled from PortfolioState internals.
     Works with:
-      - cash_total() method (your current core implementation)
+      - cash_total() method
       - cash_total attribute
       - cash_balance attribute
       - get_cash_total() method
@@ -134,17 +160,16 @@ def _get_total_cash(PortfolioState) -> Decimal:
 
     raise AllocationError("PortfolioState missing cash_total/cash_balance/get_cash_total")
 
+
 def _get_position_quantity(PortfolioState, symbol: str, sleeve: str = "core") -> Decimal:
-    # PortfolioState has find_position(symbol, sleeve)
     if hasattr(PortfolioState, "find_position"):
         pos = PortfolioState.find_position(symbol, sleeve)
         if pos is None:
             return Decimal("0")
         return Decimal(str(pos.quantity))
-    # fallback: scan positions list
+
     if hasattr(PortfolioState, "positions"):
         for p in PortfolioState.positions:
             if getattr(p, "symbol", None) == symbol and getattr(p, "sleeve", None) == sleeve:
                 return Decimal(str(getattr(p, "quantity", 0.0)))
     return Decimal("0")
-

@@ -211,3 +211,7 @@ core/
 scripts/
 bootstrap_phase1.sh
 
+
+# Frontier artifacts
+data/frontiers/
+
