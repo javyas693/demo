@@ -44,8 +44,25 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
+import logging
 
-from ai_advisory.strategy.tax_neutral import handle_option_loss_tax_neutral_single_lot
+logger = logging.getLogger(__name__)
+
+from backend.engine.strategy_runner import StrategyRunner
+class SimState:
+    def __init__(self, shares, cost_basis, cash, price):
+        self.shares = shares
+        self.cost_basis = cost_basis
+        self.cash = cash
+        self.price = price
+
+class SimParams:
+    def __init__(self, sell_shares, option_loss_available, tax_rate, trigger_percent):
+        self.sell_shares = sell_shares
+        self.shares_required = sell_shares  # Alias for strategies
+        self.option_loss_available = option_loss_available
+        self.tax_rate = tax_rate
+        self.trigger_percent = trigger_percent
 # -----------------------------
 # Data structures
 # -----------------------------
@@ -347,8 +364,15 @@ class StrategyUnwindEngine:
 
         total_realized_option_pnl = 0.0,
         audit_log: list[str] = [],
+        loss_handling_mode: str = "harvest_hold",
         cash_return_mode: str = "underlying",  # v1: cash grows at underlying return
+        starting_cash: float = 0.0,
+        max_shares_per_month: int = 200,
     ) -> Dict[str, Any]:
+        runner = StrategyRunner()
+        # map loss_handling_mode -> StrategyRunner key
+        strategy_key = "tax_neutral" if loss_handling_mode == "tax_neutral_sell" else "harvest"
+        
         df = self.price_data.copy()
 
         # Initialize columns
@@ -378,6 +402,7 @@ class StrategyUnwindEngine:
 
         basis = float(cost_basis) if cost_basis is not None else initial_price
         state = self._init_overlay_state(cost_basis=basis)
+        state.cash = starting_cash
 
         # Volatility (deterministic)
         volatility = self.estimate_volatility()
@@ -392,12 +417,22 @@ class StrategyUnwindEngine:
         total_realized_option_loss = 0.0
         total_shares_sold_on_call_loss = 0
         total_realized_option_pnl = 0.0
-
         
+        audit_log = []
+
+        # Monthly sale tracking
+        shares_sold_this_month = 0
+        current_month = None
         
         for date, row in df.iterrows():
             current_price = float(row["Price"])
             exit_reason = ""
+            
+            # Reset monthly counter
+            month = (date.year, date.month)
+            if current_month != month:
+                current_month = month
+                shares_sold_this_month = 0
 
             # -----------------------------
             # Step 1: cash accrual at underlying return (v1)
@@ -481,32 +516,98 @@ class StrategyUnwindEngine:
                         loss_amt = abs(realized_option_pnl)
                         total_realized_option_loss += loss_amt
 
-                        # Run the trigger/sell handler FIRST
-                        shares_sold = self._handle_option_loss_tax_neutral_single_lot(
-                            state=state,
-                            option_loss_abs=loss_amt,
-                            current_price=current_price,
-                            share_reduction_trigger_pct=share_reduction_trigger_pct,
+                        # Evaluate option loss offset / strategy
+                        reason = ""
+                        trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
+                        gain_per_share = current_price - state.cost_basis
+                        
+                        if gain_per_share <= 0:
+                            shares_required = 0
+                            reason = "no_gain_available"
+                        else:
+                            shares_required = int(floor(loss_amt / gain_per_share))
+                            
+                            remaining_monthly_capacity = max_shares_per_month - shares_sold_this_month
+                            
+                            if remaining_monthly_capacity <= 0:
+                                shares_required = 0
+                                reason = "monthly_cap_reached"
+                            else:
+                                shares_required = min(
+                                    shares_required,
+                                    remaining_monthly_capacity,
+                                    int(state.shares)
+                                )
+                                if strategy_key == "tax_neutral":
+                                    if current_price < trigger_px:
+                                        reason = "trigger_not_met"
+                                    else:
+                                        reason = "trigger_met"
+                                else:
+                                    reason = "trigger_not_met"
+                                    
+                        logger.debug(
+                            f"LOSS={loss_amt:.2f} "
+                            f"GAIN_PER_SHARE={gain_per_share:.2f} "
+                            f"SHARES_REQUIRED={shares_required}"
                         )
+                        
+                        sim_state = SimState(shares=state.shares, cost_basis=state.cost_basis, cash=state.cash, price=current_price)
+                        sim_params = SimParams(
+                            sell_shares=shares_required, 
+                            option_loss_available=loss_amt, 
+                            tax_rate=self.long_term_tax_rate, 
+                            trigger_percent=share_reduction_trigger_pct
+                        )
+                        
+                        strat_res = runner.run(strategy_key, sim_state, sim_params)
+                        
+                        shares_sold = strat_res.get("shares_sold", 0)
+                        cash_gen = strat_res.get("cash_generated", 0.0)
+                        taxes_paid = strat_res.get("taxes", 0.0)
+                        tlh_add = strat_res.get("tlh_delta", 0.0)
+                        action_str = strat_res.get("action", "NO-SELL")
+                        trigger_px = strat_res.get("trigger_price", state.cost_basis)
+                        
+                        state.shares -= shares_sold
+                        shares_sold_this_month += int(shares_sold)
+                        state.cash += (cash_gen - taxes_paid)
+                        state.cumulative_taxes += taxes_paid
+                        state.cumulative_tlh += tlh_add
+                        state.realized_stock_gain += strat_res.get("realized_gain", 0.0)
+
+                        total_shares_sold_on_call_loss += int(shares_sold)
+
                         total_shares_sold_on_call_loss += int(shares_sold)
 
                         # Now log what actually happened
-                        action = "SELL" if int(shares_sold) > 0 else "NO-SELL"
-                        audit_log.append(
-                            f"{date.date()} | {exit_reason} | {action} | "
-                            f"opt_loss=${loss_amt:,.0f} | "
-                            f"px=${current_price:,.2f} | "
-                            f"basis=${state.cost_basis:,.2f} | "
-                            f"trigger={share_reduction_trigger_pct:.2%} | "
-                            f"trigger_px=${state.cost_basis * (1 + share_reduction_trigger_pct):,.2f} | "
-                            f"shares_sold={int(shares_sold)} | "
-                            f"taxes=${state.cumulative_taxes:,.0f} | "
-                            f"tlh=${state.cumulative_tlh:,.0f}"
-                        )
+                        if not exit_reason:
+                            exit_reason = "CLOSE_STOP"
+                            
+                        # Format the log precisely per requirements
+                        if strategy_key == "harvest" or action_str == "HARVEST_ONLY":
+                            reason = "harvest_mode"
+                            base_log = (
+                                f"{date.date()} | {exit_reason} | {action_str}\n"
+                                f"reason={reason}\n"
+                                f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f}"
+                            )
+                        else:
+                            base_log = (
+                                f"{date.date()} | {exit_reason} | {action_str}\n"
+                                f"reason={reason}\n"
+                                f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}"
+                            )
+                        
+                        financials_log = f"opt_loss=${loss_amt:,.0f} | taxes=${taxes_paid:,.0f} | tlh=${tlh_add:,.0f} | tlh_total=${state.cumulative_tlh:,.0f}"
+                        
+                        if int(shares_sold) > 0:
+                            rem_cap = max(0, max_shares_per_month - shares_sold_this_month)
+                            shares_log = f"shares_sold={int(shares_sold)} | monthly_cap_remaining={rem_cap}"
+                            audit_log.append(f"{base_log}\n{shares_log}\n{financials_log}")
+                        else:
+                            audit_log.append(f"{base_log}\n{financials_log}")
 
-
-
-                        # (enable_tax_loss_harvest is kept for UI compatibility; TLH is tracked regardless)
                         # If you want to “turn off TLH tracking” when disabled:
                         if not enable_tax_loss_harvest:
                             # roll back what we added to TLH in the handler by setting to 0 delta:
@@ -594,8 +695,48 @@ class StrategyUnwindEngine:
         final_shares = float(df["Shares"].iloc[-1])
         final_stock_value = float(df["Stock_Value"].iloc[-1])
         final_cash = float(df["Cash"].iloc[-1])
-        final_portfolio_value = final_stock_value + final_cash
-        total_return = (final_portfolio_value / initial_value - 1.0) * 100.0
+
+        starting_shares = int(self.initial_shares)
+        starting_price = float(initial_price)
+        final_price = float(df["Price"].iloc[-1])
+
+        total_shares_sold = starting_shares - final_shares
+        remaining_shares = starting_shares - total_shares_sold
+        
+        net_option_cash_flow = float(total_realized_option_pnl)
+        ending_cash = final_cash
+        ending_stock_value = remaining_shares * final_price
+
+        final_portfolio_value = ending_stock_value + ending_cash
+        starting_portfolio_value = (starting_shares * starting_price) + starting_cash
+
+        if starting_portfolio_value > 0:
+            total_return = ((final_portfolio_value - starting_portfolio_value) / starting_portfolio_value) * 100.0
+        else:
+            total_return = 0.0
+
+        print("\n==============================")
+        print("SIMULATION SUMMARY")
+        print("==============================")
+        print()
+        print(f"Starting Shares:        {starting_shares}")
+        print(f"Shares Sold:            {int(total_shares_sold)}")
+        print(f"Remaining Shares:       {int(remaining_shares)}")
+        print()
+        print(f"Starting Price:         ${starting_price:,.2f}")
+        print(f"Final Price:            ${final_price:,.2f}")
+        print()
+        print(f"Starting Cash:          ${starting_cash:,.0f}")
+        print(f"Net Option Cash Flow:   ${net_option_cash_flow:,.0f}")
+        print()
+        print(f"Ending Stock Value:     ${ending_stock_value:,.0f}")
+        print(f"Ending Cash:            ${ending_cash:,.0f}")
+        print()
+        print(f"Final Portfolio Value:  ${final_portfolio_value:,.0f}")
+        print()
+        print(f"Total Return:           {total_return:.2f}%")
+        print()
+        print("==============================\n")
 
         shares_reduced = int(total_shares_sold_on_call_loss)
 
@@ -610,15 +751,17 @@ class StrategyUnwindEngine:
             "realized_option_pnl": float(total_realized_option_pnl),
             "realized_option_loss": float(total_realized_option_loss),
             "realized_stock_gain": float(state.realized_stock_gain),
+            "net_option_cash_flow": net_option_cash_flow,
         
             # valuation
-            "initial_value": float(initial_value),
-            "final_stock_value": float(final_stock_value),
-            "final_cash": float(final_cash),
+            "starting_cash": float(starting_cash),
+            "initial_value": float(starting_portfolio_value),
+            "final_stock_value": float(ending_stock_value),
+            "final_cash": float(ending_cash),
             "final_portfolio_value": float(final_portfolio_value),
             "total_return_pct": float(total_return),
         
-            "cash_balance": float(final_cash),
+            "cash_balance": float(ending_cash),
             "total_pnl": float(df["Total_PnL"].iloc[-1]),
         
             # config echo (locked v1)

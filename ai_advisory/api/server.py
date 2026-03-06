@@ -1,14 +1,212 @@
 from __future__ import annotations
 
 from pathlib import Path
+from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 
+from ai_advisory.services.http_models import ClientProfile, ProfilePatch, OrchestrateResponse
+from ai_advisory.services.profile_store import ProfileStore
+from ai_advisory.services.orchestrator_service import propose as orchestrate_propose
+from ai_advisory.services.http_models import (
+    ClientProfile, ProfilePatch, OrchestrateResponse,
+    SessionResponse, SignalsResponse, ProgramWorkspaceResponse,
+)
+from ai_advisory.services.capital_summary_service import compute_capital_summary
+from ai_advisory.services.signals_service import compute_signals
+from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
+import uuid
+from ai_advisory.api.plan_models import TradePlan, TradeAction
+from ai_advisory.core.plan_store import PlanStore
+from ai_advisory.strategy.strategy_unwind import StrategyUnwindEngine
+from datetime import timedelta
+
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # repo root
 QUESTIONNAIRE_PATH = BASE_DIR / "Simplified Risk Profile Questionarre Algo.xlsx"
 STORE_ROOT = BASE_DIR / "data" / "frontiers"
 
+PROFILE_PATH = BASE_DIR / "data" / "profile.json"
+profile_store = ProfileStore(PROFILE_PATH)
+
+PLAN_STORE_DIR = BASE_DIR / "data"
+plan_store = PlanStore(PLAN_STORE_DIR)
+
+@app.post("/dev/reset")
+def dev_reset():
+    profile_store.clear()
+    return {"ok": True}
+
+@app.get("/profile", response_model=ClientProfile)
+def get_profile():
+    return profile_store.load()
+
+
+@app.post("/profile/patch", response_model=ClientProfile)
+def patch_profile(patch: ProfilePatch):
+    return profile_store.patch(patch)
+
+@app.get("/session", response_model=SessionResponse)
+def get_session():
+    profile = profile_store.load()
+
+    positions = getattr(profile, "positions", None) or []
+    cash = getattr(profile, "cash_to_invest", None)
+    risk = getattr(profile, "risk_score", None)
+
+    has_profile = bool(
+        (risk is not None)
+        or (cash is not None and float(cash) > 0)
+        or (len(positions) > 0)
+    )
+
+    return SessionResponse(has_profile=has_profile, profile=profile)
+
+
+@app.on_event("startup")
+def _startup_reset():
+    profile_store.clear()
+
+@app.get("/capital/summary")
+def capital_summary():
+    profile = profile_store.load()
+    return compute_capital_summary(profile)
+
+
+@app.get("/signals", response_model=SignalsResponse)
+def signals():
+    profile = profile_store.load()
+    sigs = compute_signals(profile)
+    return SignalsResponse(signals=sigs)
+
+
+@app.get("/programs/{program_key}", response_model=ProgramWorkspaceResponse)
+def program_workspace(program_key: str):
+    profile = profile_store.load()
+    sigs = [s for s in compute_signals(profile) if s.program == program_key]
+
+    # Minimal per-program scaffolding (UI stable; engines can fill later)
+    program_map = {
+        "concentrated_position": ("Concentrated Position Workspace", "Manage large single-stock exposures, risk reduction, and covered calls."),
+        "risk_reduction": ("Risk Reduction Workspace", "Monitoring and active adjustments for risk reduction."),
+        "tax_optimization": ("Tax Optimization Workspace", "Monitoring and active adjustments for tax optimization."),
+        "income_generation": ("Income Generation Workspace", "Monitoring and active adjustments for income generation."),
+        "core_allocation": ("Core Allocation Workspace", "Monitoring and active adjustments for core allocation."),
+    }
+    if program_key not in program_map:
+        raise HTTPException(status_code=404, detail=f"Unknown program_key: {program_key}")
+
+    title, subtitle = program_map[program_key]
+
+    status = "active"
+    if any(s.severity in ("medium", "high") for s in sigs):
+        status = "action_required"
+    elif sigs:
+        status = "monitoring"
+
+    # Reuse a consistent workspace shape (values can be replaced by real engines later)
+    summary_cards = []
+    if program_key in ["risk_reduction", "concentrated_position"]:
+        summary_cards = [
+            {"label": "Modeled Volatility", "value": "18%", "tag": "Forecast"},
+            {"label": "Modeled Income", "value": "3.8%", "tag": "Moderate"},
+            {"label": "Concentration", "value": "25%", "tag": "Max"},
+            {"label": "Diversification Score", "value": "72", "tag": "Warning"},
+        ]
+    elif program_key == "tax_optimization":
+        summary_cards = [
+            {"label": "Tax Impact (YTD)", "value": "+$12,450", "tag": "Estimated"},
+            {"label": "Harvesting Status", "value": "Monitoring", "tag": None},
+        ]
+    elif program_key == "income_generation":
+        summary_cards = [
+            {"label": "Income (Quarter)", "value": "$4,250", "tag": "Received"},
+            {"label": "Income Target", "value": "On Track", "tag": None},
+        ]
+    else:  # core_allocation
+        summary_cards = [
+            {"label": "Alignment", "value": f"{getattr(profile, 'risk_score', 50)}/100", "tag": "Aligned"},
+            {"label": "Rebalance", "value": "Monitoring", "tag": None},
+        ]
+
+    return ProgramWorkspaceResponse(
+        program=program_key,  # ProgramKey enforced by response_model
+        status=status,
+        summary_title=title,
+        summary_subtitle=subtitle,
+        summary_cards=summary_cards,
+        signals=sigs,
+        tabs=["overview", "allocation", "historical", "future", "trades"],
+    )
+
+@app.get("/programs/concentrated_position/simulate")
+def simulate_concentrated_position(
+    coverage_pct: float = 50.0,
+    target_delta: float = 0.20,
+    target_dte_days: int = 30,
+    share_reduction_trigger_pct: float = 0.0,
+    loss_handling_mode: str = "harvest_hold",
+    starting_cash: float = 0.0,
+    max_shares_per_month: int = 200
+):
+    profile = profile_store.load()
+    if not profile.positions:
+        raise HTTPException(status_code=400, detail="No concentrated position found")
+
+    pos = profile.positions[0]
+
+    end_date_str = datetime.now().strftime("%Y-%m-%d")
+    start_date_str = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    engine = StrategyUnwindEngine(
+        ticker=pos.symbol,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        initial_shares=pos.shares
+    )
+
+    result = engine.run_covered_call_overlay(
+        coverage_pct=coverage_pct,
+        target_dte_days=target_dte_days,
+        target_delta=target_delta,
+        share_reduction_trigger_pct=share_reduction_trigger_pct,
+        cost_basis=pos.cost_basis,
+        loss_handling_mode=loss_handling_mode,
+        starting_cash=starting_cash,
+        max_shares_per_month=max_shares_per_month
+    )
+
+    print("DEBUG RESULT KEYS:", result.keys())
+    print("DEBUG SUMMARY:", result.get("summary"))
+
+    # Convert pandas DataFrame to JSON
+    if "time_series" in result:
+        result["time_series"] = result["time_series"].to_dict(orient="records")
+
+    summary = result.get("summary", {})
+
+    initial = summary.get("initial_shares")
+    final = summary.get("final_shares")
+
+    if initial is not None and final is not None:
+        summary["shares_sold"] = int(initial - final)
+
+    result["summary"] = summary
+
+    return result
+@app.post("/orchestrate/propose", response_model=OrchestrateResponse)
+def orchestrate():
+    profile = profile_store.load()
+    return orchestrate_propose(profile)
 
 @app.get("/health")
 def health():
@@ -52,3 +250,188 @@ def risk_score(payload: dict):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/plans/propose", response_model=dict)
+def propose_plan(payload: dict):
+    program_key = payload.get("program_key")
+    params = payload.get("params", {})
+    
+    profile = profile_store.load()
+    positions = getattr(profile, "positions", [])
+    
+    plan_id = str(uuid.uuid4())
+    actions = []
+    
+    # Deterministic price assumptions for v0
+    assumed_price = 1.0
+    
+    if program_key in ("risk_reduction", "concentrated_position"):
+        if not positions:
+            raise HTTPException(status_code=400, detail="No concentrated position found to reduce.")
+            
+        target_pos = positions[0] # assuming the first one is the concentrated one
+        
+        intensity = params.get("intensity", 50) # 0 to 100 
+        reduction_pct = (intensity / 100.0) * 0.30
+        
+        shares_to_sell = target_pos.shares * reduction_pct
+        if shares_to_sell <= 0:
+            shares_to_sell = 0 # No op
+            
+        cash_generated = shares_to_sell * assumed_price
+        
+        if shares_to_sell > 0:
+            actions.append(TradeAction(
+                type="SELL",
+                symbol=target_pos.symbol,
+                shares=shares_to_sell,
+                dollars=cash_generated,
+                notes=f"Reduce {target_pos.symbol} position by {reduction_pct*100:.1f}%"
+            ))
+            
+            actions.append(TradeAction(
+                type="ALLOCATE_CASH",
+                amount=cash_generated,
+                model_key=params.get("reinvest_model_key", "core_v0"),
+                notes="Reinvest proceeds into core allocation"
+            ))
+            
+        plan = TradePlan(
+            plan_id=plan_id,
+            program_key=program_key,
+            created_at=datetime.utcnow(),
+            summary=f"Risk Reduction Action Plan",
+            why=["Concentration risk elevated.", "Cash generated will be diversified."],
+            cash_delta_estimate=cash_generated,
+            actions=actions
+        )
+        
+    elif program_key == "income_generation" or program_key == "income_generation_v0":
+        covered_pct = params.get("covered_pct", 50) / 100.0
+        premium_rate = params.get("premium_rate", 0.006)
+        withdraw_pct = params.get("withdraw_pct", 0) / 100.0
+        
+        if not positions:
+            raise HTTPException(status_code=400, detail="No positions available to cover.")
+            
+        target_pos = positions[0]
+        position_value = target_pos.shares * assumed_price
+        
+        notional_covered = position_value * covered_pct
+        premium = notional_covered * premium_rate
+        net_credit = premium * (1.0 - withdraw_pct)
+        
+        if premium > 0:
+            actions.append(TradeAction(
+                type="CASH_CREDIT",
+                amount=net_credit,
+                notes=f"Credit ${premium:.2f} premium (withdrawing {withdraw_pct*100:.1f}%)"
+            ))
+            
+            if params.get("reinvest_model_key"):
+                actions.append(TradeAction(
+                    type="ALLOCATE_CASH",
+                    amount=net_credit,
+                    model_key=params.get("reinvest_model_key"),
+                    notes="Reinvest premium into core"
+                ))
+            
+        plan = TradePlan(
+            plan_id=plan_id,
+            program_key=program_key,
+            created_at=datetime.utcnow(),
+            summary=f"Income Generation: Harvest ${premium:.2f} premium on {target_pos.symbol}",
+            why=["Extracting yield from concentrated position.", f"Withdrawing {withdraw_pct*100:.0f}% of proceeds."],
+            cash_delta_estimate=net_credit,
+            actions=actions
+        )
+        
+    elif program_key == "core_allocation":
+        cash_available = profile.cash_to_invest
+        
+        if cash_available <= 0:
+            raise HTTPException(status_code=400, detail="No cash available to allocate.")
+            
+        actions.append(TradeAction(
+            type="ALLOCATE_CASH",
+            amount=cash_available,
+            model_key="core_v0",
+            notes=f"Deploy ${cash_available:.2f} available cash into long-term Core Model"
+        ))
+        
+        plan = TradePlan(
+            plan_id=plan_id,
+            program_key=program_key,
+            created_at=datetime.utcnow(),
+            summary=f"Core Allocation Action Plan",
+            why=["Idle cash identified in the portfolio.", "Deploying to target beta exposures."],
+            cash_delta_estimate=-cash_available,
+            actions=actions
+        )
+        
+    else:
+        raise HTTPException(status_code=400, detail=f"Program key {program_key} not supported for proposals.")
+        
+    plan_store.save_plan(plan)
+    return {"plan": plan.model_dump()}
+
+
+@app.post("/plans/commit/{plan_id}", response_model=dict)
+def commit_plan(plan_id: str, mode: str = "paper"):
+    plan = plan_store.load_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+        
+    profile = profile_store.load()
+    assumed_price = 1.0 # deterministic mock override
+    
+    for action in plan.actions:
+        if action.type == "SELL":
+            for pos in profile.positions:
+                if pos.symbol == action.symbol and action.shares:
+                    pos.shares -= action.shares
+                    profile.cash_to_invest += (action.shares * assumed_price)
+                    break
+            # Purge exhausted lots
+            profile.positions = [p for p in profile.positions if p.shares > 0]
+            
+        elif action.type == "CASH_CREDIT":
+            if action.amount:
+                profile.cash_to_invest += action.amount
+            
+        elif action.type == "ALLOCATE_CASH":
+            from ai_advisory.services.http_models import PositionIn
+            amount = action.amount or 0
+            if amount > 0:
+                profile.cash_to_invest -= amount
+                # Mock ETF basket deployment 
+                basket = {"VTI": 0.60, "VXUS": 0.30, "BND": 0.10}
+                stub_prices = {"VTI": 250.0, "VXUS": 60.0, "BND": 70.0}
+                
+                for symbol, weight in basket.items():
+                    alloc_dollars = amount * weight
+                    alloc_shares = alloc_dollars / stub_prices[symbol]
+                    
+                    existing = next((p for p in profile.positions if p.symbol == symbol), None)
+                    if existing:
+                        current_cost = existing.cost_basis or stub_prices[symbol]
+                        total_value = (existing.shares * current_cost) + alloc_dollars
+                        total_shares = existing.shares + alloc_shares
+                        existing.cost_basis = total_value / total_shares if total_shares > 0 else stub_prices[symbol]
+                        existing.shares = total_shares
+                    else:
+                        profile.positions.append(PositionIn(
+                            symbol=symbol,
+                            shares=alloc_shares,
+                            cost_basis=stub_prices[symbol],
+                            sleeve="core"
+                        ))
+                    
+    profile_store.save(profile)
+    
+    return {
+        "plan": plan.model_dump(),
+        "profile": profile.model_dump(),
+        "capital_summary": compute_capital_summary(profile).model_dump(),
+        "signals": SignalsResponse(signals=compute_signals(profile)).model_dump()
+    }

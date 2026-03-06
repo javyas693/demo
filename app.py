@@ -1,7 +1,7 @@
 import streamlit as st
 
-from engine import run_real_price_simulation, DataFetchError
-from strategy_unwind import run_strategy_comparison
+from ai_advisory.strategy.engine import run_real_price_simulation, DataFetchError
+from ai_advisory.strategy.strategy_unwind import run_strategy_comparison
 from ui.sidebar import build_sidebar_inputs
 from ui.formatters import fmt_money, fmt_pct
 from viz.charts_main import make_two_line_portfolio_chart
