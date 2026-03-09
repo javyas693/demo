@@ -67,3 +67,27 @@ class TradePlan(BaseModel):
     
     # Flag indicating whether this plan requires advisor or client review before execution
     requires_approval: bool = True
+
+class CombinedTradePlan(BaseModel):
+    """
+    Unified representation of a transition proposal encompassing both
+    the sell-side (CP unwinds) and buy-side (MP allocations).
+    """
+    sell_orders: List[TradePlan]
+    buy_orders: List[TradePlan]
+    total_tax_estimate: float
+    net_reinvestment_total: float
+
+class TransitionRequest(BaseModel):
+    """
+    Input parameters for the unified transition proposal endpoint.
+    """
+    risk_score: int
+    model_id: str
+    target_dte_days: int = 30
+    target_delta: float = 0.20
+    share_reduction_trigger_pct: float = 0.0
+    coverage_pct: float = 50.0
+    loss_handling_mode: str = "harvest_hold"
+    max_shares_per_month: int = 200
+    starting_cash: float = 0.0

@@ -16,9 +16,12 @@ from ai_advisory.services.signals_service import compute_signals
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import uuid
-from ai_advisory.api.plan_models import TradePlan, TradeAction
+from ai_advisory.api.plan_models import TradePlan, TradeAction, CombinedTradePlan, TransitionRequest
 from ai_advisory.core.plan_store import PlanStore
 from ai_advisory.strategy.strategy_unwind import StrategyUnwindEngine
+from ai_advisory.strategy.transition_manager import TransitionManager
+from ai_advisory.frontier.store.fs_store import FileSystemFrontierStore
+from ai_advisory.services.concentrated_service import _sanitize_for_json
 from datetime import timedelta
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
@@ -154,6 +157,8 @@ def simulate_concentrated_position(
     target_delta: float = 0.20,
     target_dte_days: int = 30,
     share_reduction_trigger_pct: float = 0.0,
+    start_date: str | None = None,
+    end_date: str | None = None,
     loss_handling_mode: str = "harvest_hold",
     starting_cash: float = 0.0,
     max_shares_per_month: int = 200
@@ -164,8 +169,8 @@ def simulate_concentrated_position(
 
     pos = profile.positions[0]
 
-    end_date_str = datetime.now().strftime("%Y-%m-%d")
-    start_date_str = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    end_date_str = end_date if end_date else datetime.now().strftime("%Y-%m-%d")
+    start_date_str = start_date if start_date else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
     engine = StrategyUnwindEngine(
         ticker=pos.symbol,
@@ -203,6 +208,119 @@ def simulate_concentrated_position(
     result["summary"] = summary
 
     return result
+
+@app.post("/api/v1/programs/transition/propose", response_model=CombinedTradePlan)
+def propose_transition(req: TransitionRequest):
+    """
+    Unified transition planner endpoint. 
+    1. Simulates the CP unwind using StrategyUnwindEngine.
+    2. Extracts net proceeds.
+    3. Simulates the MP reinvestment using TransitionManager.
+    4. Returns a CombinedTradePlan.
+    """
+    profile = profile_store.load()
+    if not profile.positions:
+        raise HTTPException(status_code=400, detail="No concentrated position found")
+
+    # For MVP, just grab the first position
+    pos = profile.positions[0]
+
+    end_date_str = datetime.now().strftime("%Y-%m-%d")
+    start_date_str = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    # 1. Step A (The Sell): Call StrategyUnwindEngine
+    engine = StrategyUnwindEngine(
+        ticker=pos.symbol,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        initial_shares=pos.shares
+    )
+
+    unwind_result = engine.run_covered_call_overlay(
+        coverage_pct=req.coverage_pct,
+        target_dte_days=req.target_dte_days,
+        target_delta=req.target_delta,
+        share_reduction_trigger_pct=req.share_reduction_trigger_pct,
+        cost_basis=pos.cost_basis,
+        loss_handling_mode=req.loss_handling_mode,
+        starting_cash=req.starting_cash,
+        max_shares_per_month=req.max_shares_per_month
+    )
+
+    summary = unwind_result.get("summary", {})
+    
+    # Extract total tax and cash harvested from the summary
+    total_tax_estimate = summary.get("estimated_tax", 0.0)
+    
+    # 2. Step B (The Net): Extract tax and calculate net proceeds
+    # Note: We are mocking the proceeds calculation directly from shares sold * current price 
+    # since the simulator doesn't give us the clean ending cash balance delta in all scenarios yet.
+    # In a full implementation, the UI's inputs or simulator state handles the net cash generated natively.
+    initial_shares = summary.get("initial_shares", 0.0)
+    final_shares = summary.get("final_shares", 0.0)
+    shares_sold = initial_shares - final_shares
+    assumed_cp_price = 1000.0 # MVP static price
+    gross_proceeds = shares_sold * assumed_cp_price
+    net_proceeds = gross_proceeds - total_tax_estimate
+
+    # Construct the Sell Orders plan covering the unwind
+    # We aggregate the unwind into a single high-level TradePlan "SELL" action for the proposal
+    sell_actions = []
+    if shares_sold > 0:
+        sell_actions.append(
+            TradeAction(
+                type="SELL",
+                symbol=pos.symbol,
+                shares=shares_sold,
+                dollars=gross_proceeds,
+                notes=f"Overlaid Covered Call Strategy. Tax escrow withholding: ${total_tax_estimate:,.2f}"
+            )
+        )
+        
+    sell_plan = TradePlan(
+        plan_id=str(uuid.uuid4()),
+        program_key="concentrated_position",
+        created_at=datetime.utcnow(),
+        summary=f"Unwind strategy for {pos.symbol}",
+        why=["Execute planned reduction via CC overlay."],
+        cash_delta_estimate=net_proceeds, # The net cash joining the core
+        actions=sell_actions,
+        requires_approval=True
+    )
+
+    # 3. Step C (The Buy): Pass net_proceeds into TransitionManager
+    store = FileSystemFrontierStore(root=str(STORE_ROOT))
+    
+    try:
+        transition = TransitionManager(
+            store=store,
+            as_of=end_date_str, # Using today as the 'as_of' for frontier lookup
+            model_id=req.model_id
+        )
+        # Even if net_proceeds is 0, we can still generate an empty set of buy orders 
+        # but realistically no net_proceeds means no reinvestments
+        buy_orders = transition.get_reinvestment_orders(
+            net_proceeds=net_proceeds, 
+            risk_score=req.risk_score
+        )
+    except Exception as e:
+        # Fallback if there's no active frontier or data mismatch
+        print(f"Failed to generate reinvestments: {e}")
+        buy_orders = []
+
+    # 4. Step D (The Result): Wrap it gracefully
+    combined = CombinedTradePlan(
+        sell_orders=[sell_plan],
+        buy_orders=buy_orders,
+        total_tax_estimate=total_tax_estimate,
+        net_reinvestment_total=net_proceeds
+    )
+
+    # Sanitization Layer to strip numpy types and ensure clean FastAPI response
+    sanitized_dict = _sanitize_for_json(combined.model_dump())
+    
+    return CombinedTradePlan(**sanitized_dict)
+
 @app.post("/orchestrate/propose", response_model=OrchestrateResponse)
 def orchestrate():
     profile = profile_store.load()

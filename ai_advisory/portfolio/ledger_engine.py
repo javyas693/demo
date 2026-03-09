@@ -34,6 +34,7 @@ class LedgerEvent:
 
     # Cash events
     amount: float = 0.0
+    tax_impact: Optional[float] = None
 
     # Trade events
     symbol: Optional[str] = None
@@ -105,7 +106,13 @@ def apply_event(state: PortfolioState, event: LedgerEvent) -> PortfolioState:
             return state
 
         # sell_fill
-        state.cash_by_sleeve[event.sleeve] += notional
+        tax_impact = float(event.tax_impact) if event.tax_impact is not None else 0.0
+        net_proceeds = notional - tax_impact
+
+        state.cash_by_sleeve[event.sleeve] += net_proceeds
+        if tax_impact > 0:
+            state.cash_by_sleeve["tax_escrow"] += tax_impact
+            
         state.upsert_position(event.symbol, event.sleeve, -qty, px)
         return state
 
