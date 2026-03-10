@@ -59,6 +59,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     // Income Specific Simulation Params
     const [coveredPct, setCoveredPct] = React.useState(50);
     const [withdrawPct, setWithdrawPct] = React.useState(0);
+    const [profitCaptureTarget, setProfitCaptureTarget] = React.useState(50);
 
     // CP Inputs
     const [inputSymbol, setInputSymbol] = React.useState("AAPL");
@@ -70,12 +71,12 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
 
     // CP Simulation Time/Mode Controls
     const getTodayStr = () => new Date().toISOString().split('T')[0];
-    const getFiveYearsAgoStr = () => {
+    const getTenYearsAgoStr = () => {
         const d = new Date();
-        d.setFullYear(d.getFullYear() - 5);
+        d.setFullYear(d.getFullYear() - 10);
         return d.toISOString().split('T')[0];
     };
-    const [startDate, setStartDate] = React.useState(getFiveYearsAgoStr());
+    const [startDate, setStartDate] = React.useState(getTenYearsAgoStr());
     const [endDate, setEndDate] = React.useState(getTodayStr());
     const [lossHandlingMode, setLossHandlingMode] = React.useState("harvest_hold");
     const [lastRunSimulationRef, setLastRunSimulationRef] = React.useState<{ start: string, end: string } | null>(null);
@@ -147,6 +148,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                     coverage_pct: coveredPct,
                     target_delta: targetDelta,
                     target_dte_days: targetDteDays,
+                    profit_capture_pct: profitCaptureTarget / 100.0,
                     share_reduction_trigger_pct: Number(shareReductionTriggerPct) / 100,
                     start_date: startDate,
                     end_date: endDate,
@@ -525,6 +527,16 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                         <span>{targetDteDays}</span>
                                                     </div>
                                                     <Slider defaultValue={[30]} value={[targetDteDays]} min={7} max={90} step={1} onValueChange={(v) => setTargetDteDays(v[0])} />
+                                                </div>
+                                                <div className="space-y-4">
+                                                    <div className="flex justify-between items-start text-sm font-medium">
+                                                        <div className="flex flex-col">
+                                                            <span>Profit Capture Target (%)</span>
+                                                            <span className="text-xs text-zinc-500 font-normal mt-1">0% captures profit immediately; 100% holds until expiration.</span>
+                                                        </div>
+                                                        <span>{profitCaptureTarget}%</span>
+                                                    </div>
+                                                    <Slider defaultValue={[50]} value={[profitCaptureTarget]} min={0} max={100} step={5} onValueChange={(v) => setProfitCaptureTarget(v[0])} />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <div className="flex justify-between items-center text-sm font-medium">

@@ -153,10 +153,13 @@ def simulate_concentrated_position(
     coverage_pct: float = 50.0,
     target_delta: float = 0.20,
     target_dte_days: int = 30,
+    profit_capture_pct: float = 0.50,
     share_reduction_trigger_pct: float = 0.0,
     loss_handling_mode: str = "harvest_hold",
     starting_cash: float = 0.0,
-    max_shares_per_month: int = 200
+    max_shares_per_month: int = 200,
+    start_date: str | None = None,
+    end_date: str | None = None
 ):
     profile = profile_store.load()
     if not profile.positions:
@@ -164,13 +167,14 @@ def simulate_concentrated_position(
 
     pos = profile.positions[0]
 
+    # Default to 1 year if not provided through args (fallback)
     end_date_str = datetime.now().strftime("%Y-%m-%d")
     start_date_str = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
     engine = StrategyUnwindEngine(
         ticker=pos.symbol,
-        start_date=start_date_str,
-        end_date=end_date_str,
+        start_date=start_date if start_date else start_date_str,
+        end_date=end_date if end_date else end_date_str,
         initial_shares=pos.shares
     )
 
@@ -178,6 +182,7 @@ def simulate_concentrated_position(
         coverage_pct=coverage_pct,
         target_dte_days=target_dte_days,
         target_delta=target_delta,
+        profit_capture_pct=profit_capture_pct,
         share_reduction_trigger_pct=share_reduction_trigger_pct,
         cost_basis=pos.cost_basis,
         loss_handling_mode=loss_handling_mode,

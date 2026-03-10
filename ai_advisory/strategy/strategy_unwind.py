@@ -286,8 +286,15 @@ class StrategyUnwindEngine:
             return "CLOSE_ASSIGNMENT_PREVENT"
 
         # 2) Profit capture
-        if profit_if_close_per_share >= float(profit_capture_pct) * premium_open_per_share:
-            return "CLOSE_PROFIT"
+        if profit_capture_pct < 1.0: # If it's 1.0 (100%), we never capture early
+            if profit_capture_pct <= 0.0:
+                # 0% edge case: capture the second it is strictly profitable
+                if profit_if_close_per_share > 0.0:
+                    return "CLOSE_PROFIT"
+            else:
+                # Normal capture logic
+                if profit_if_close_per_share >= float(profit_capture_pct) * premium_open_per_share:
+                    return "CLOSE_PROFIT"
 
         # 3) Stop loss
         if profit_if_close_per_share <= -float(stop_loss_multiple) * premium_open_per_share:
@@ -435,10 +442,9 @@ class StrategyUnwindEngine:
                 shares_sold_this_month = 0
 
             # -----------------------------
-            # Step 1: cash accrual at underlying return (v1)
+            # Step 1: cash accrual at underlying return (Removed for MVP)
             # -----------------------------
-            if cash_return_mode == "underlying" and prev_price is not None and prev_price > 0:
-                state.cash *= (current_price / prev_price)
+            # Cash should simply act as cash, PV reflects stock dropping.
 
             # -----------------------------
             # Optional scheduled reductions (kept)
