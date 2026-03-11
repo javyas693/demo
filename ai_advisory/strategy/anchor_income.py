@@ -20,12 +20,12 @@ class AnchorIncomeEngine:
         start_date: str,
         end_date: str,
         initial_capital: float = 1_000_000.0,
-        reinvest_income: bool = True
+        reinvest_pct: float = 0.0
     ):
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
         self.initial_capital = initial_capital
-        self.reinvest_income = reinvest_income
+        self.reinvest_pct = reinvest_pct
         self.events = []
 
         self.tickers_info = {
@@ -68,7 +68,7 @@ class AnchorIncomeEngine:
             proxy_ret = df_returns.loc[mask_backfill, info.proxy_ticker]
             df_returns.loc[mask_backfill, tgt] = proxy_ret * info.beta
             df_returns[tgt] = df_returns[tgt].fillna(0.0)
-
+ 
         if "QQQ" in df_returns.columns:
             df_returns["QQQ"] = df_returns["QQQ"].fillna(0.0)
             
@@ -91,6 +91,7 @@ class AnchorIncomeEngine:
         portfolio_value = np.zeros(num_days)
         pure_qqq_value = np.zeros(num_days)
         cumulative_income = np.zeros(num_days)
+        withdrawn_income_series = np.zeros(num_days)
         
         # Initial Allocation (Base Camp)
         val_jepq = self.initial_capital * self.parking_lot_target_weights["JEPQ"]
@@ -114,6 +115,11 @@ class AnchorIncomeEngine:
         ret_tltw = df_returns["TLTW"].values
         ret_svol = df_returns["SVOL"].values
         
+        portfolio_peak = self.initial_capital
+        qqq_peak = self.initial_capital
+        portfolio_max_dd = 0.0
+        qqq_max_dd = 0.0
+
         for i in range(1, num_days):
             date_str = dates[i].strftime("%Y-%m-%d")
             
@@ -126,6 +132,11 @@ class AnchorIncomeEngine:
             pure_qqq_capital *= (1.0 + qqq_returns[i])
             pure_qqq_value[i] = pure_qqq_capital
             
+            # --- QQQ Drawdown Tracking ---
+            qqq_peak = max(qqq_peak, pure_qqq_capital)
+            current_qqq_dip = (pure_qqq_capital - qqq_peak) / qqq_peak if qqq_peak > 0 else 0
+            qqq_max_dd = min(qqq_max_dd, current_qqq_dip)
+
             # Integrity Check: Start of Day
             current_capital = val_jepq + val_tltw + val_svol + val_qqq + val_cash
             
@@ -137,20 +148,23 @@ class AnchorIncomeEngine:
                 
                 if monthly_inc > 0:
                     current_cumulative_income_val += monthly_inc
-                    if self.reinvest_income:
-                        val_cash += monthly_inc
-                        current_capital += monthly_inc
-                    else:
-                        total_withdrawn_income += monthly_inc
-                        
+                    
+                    reinvest_amt = monthly_inc * (self.reinvest_pct / 100.0)
+                    withdrawn_amt = monthly_inc - reinvest_amt
+                    
+                    val_cash += reinvest_amt
+                    current_capital += reinvest_amt
+                    total_withdrawn_income += withdrawn_amt
+                    
                     approx_yield = (monthly_inc * 12) / current_capital * 100 if current_capital > 0 else 0
                     
                     self.events.append({
                         "date": date_str,
                         "event_type": "Income",
-                        "description": f"Dividend Received: ${monthly_inc:,.2f} (Yield: {approx_yield:.1f}%) [JEPQ: ${val_jepq:,.0f}, TLTW: ${val_tltw:,.0f}, SVOL: ${val_svol:,.0f}, QQQ: ${val_qqq:,.0f}, Cash: ${val_cash:,.0f}]",
+                        "description": f"Dividend Received: ${monthly_inc:,.2f} (Reinvested: ${reinvest_amt:,.2f}, Withdrawn: ${withdrawn_amt:,.2f}) [JEPQ: ${val_jepq:,.0f}, TLTW: ${val_tltw:,.0f}, SVOL: ${val_svol:,.0f}, QQQ: ${val_qqq:,.0f}, Cash: ${val_cash:,.0f}]",
                         "portfolio_value": current_capital,
-                        "cash_balance": val_cash
+                        "cash_balance": val_cash,
+                        "withdrawn": withdrawn_amt
                     })
 
             # Integrity Check: Post-Income
@@ -267,29 +281,38 @@ class AnchorIncomeEngine:
                 break
 
             portfolio_value[i] = final_cap
+            
+            # --- Portfolio MDD Tracking (Math Audit) ---
+            portfolio_peak = max(portfolio_peak, final_cap)
+            current_dip = (final_cap - portfolio_peak) / portfolio_peak if portfolio_peak > 0 else 0
+            portfolio_max_dd = min(portfolio_max_dd, current_dip)
+
             cumulative_income[i] = current_cumulative_income_val
+            withdrawn_income_series[i] = total_withdrawn_income
 
         df_out = pd.DataFrame({
             "Date": dates.strftime("%Y-%m-%d"),
             "Strategy_Value": portfolio_value,
             "Pure_QQQ_Value": pure_qqq_value,
             "Cumulative_Income": cumulative_income,
+            "Total_Withdrawn": withdrawn_income_series,
             "QQQ_Drawdown": qqq_drawdown.values
         })
         
-        total_alpha = portfolio_value[-1] - pure_qqq_value[-1]
-        print(f"--- Math Audit ---")
-        print(f"Total Dividends Collected: ${current_cumulative_income_val:,.2f} | Total Alpha from Tactical Swaps: ${total_alpha:,.2f}")
+        total_alpha = (portfolio_value[-1] + total_withdrawn_income) - pure_qqq_value[-1]
         
         return {
             "summary": {
                 "initial_value": self.initial_capital,
                 "final_strategy_value": portfolio_value[-1],
                 "final_qqq_value": pure_qqq_value[-1],
-                "total_strategy_return_pct": ((portfolio_value[-1] / self.initial_capital) - 1.0) * 100,
+                "total_strategy_return_pct": (((portfolio_value[-1] + total_withdrawn_income) / self.initial_capital) - 1.0) * 100,
                 "total_qqq_return_pct": ((pure_qqq_value[-1] / self.initial_capital) - 1.0) * 100,
                 "final_cumulative_income": current_cumulative_income_val,
+                "total_withdrawn_income": total_withdrawn_income,
                 "total_alpha": total_alpha,
+                "portfolio_max_drawdown": portfolio_max_dd * 100,
+                "qqq_max_drawdown": qqq_max_dd * 100
             },
             "time_series": df_out.to_dict(orient="records"),
             "events": self.events

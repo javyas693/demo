@@ -265,7 +265,7 @@ class AnchorIncomeSimulatePayload(BaseModel):
     start_date: str
     end_date: str
     initial_capital: float = 1000000.0
-    reinvest_income: bool = True
+    reinvest_pct: float = 0.0
 
 @app.post("/programs/anchor_income/simulate")
 def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
@@ -274,7 +274,7 @@ def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
             start_date=payload.start_date,
             end_date=payload.end_date,
             initial_capital=payload.initial_capital,
-            reinvest_income=payload.reinvest_income
+            reinvest_pct=payload.reinvest_pct
         )
         result = engine.simulate()
         

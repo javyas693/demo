@@ -96,10 +96,62 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     const [anchorIncomeCapital, setAnchorIncomeCapital] = React.useState<number | "">(1000000);
     const [anchorIncomeStartDate, setAnchorIncomeStartDate] = React.useState(getTenYearsAgoStr());
     const [anchorIncomeEndDate, setAnchorIncomeEndDate] = React.useState(getTodayStr());
+    
     const [anchorIncomeSimulationData, setAnchorIncomeSimulationData] = React.useState<any>(null);
     const [anchorIncomeSimIsLoading, setAnchorIncomeSimIsLoading] = React.useState(false);
     const [anchorIncomeLastRunRef, setAnchorIncomeLastRunRef] = React.useState<{ start: string, end: string } | null>(null);
-    const [anchorIncomeReinvest, setAnchorIncomeReinvest] = React.useState(true);
+    const [anchorIncomeReinvestPct, setAnchorIncomeReinvestPct] = React.useState(0);
+
+    // Local display states for all date inputs to allow free typing
+    const [cpStartDateDisplay, setCpStartDateDisplay] = React.useState("");
+    const [cpEndDateDisplay, setCpEndDateDisplay] = React.useState("");
+    const [mpStartDateDisplay, setMpStartDateDisplay] = React.useState("");
+    const [mpEndDateDisplay, setMpEndDateDisplay] = React.useState("");
+    const [aiStartDateDisplay, setAiStartDateDisplay] = React.useState("");
+    const [aiEndDateDisplay, setAiEndDateDisplay] = React.useState("");
+
+    // Sync display states (format internal YYYY-MM-DD to display MM-DD-YYYY)
+    React.useEffect(() => {
+        if (startDate && startDate.includes("-")) {
+            const [y, m, d] = startDate.split("-");
+            setCpStartDateDisplay(`${m}-${d}-${y}`);
+        }
+    }, [startDate]);
+
+    React.useEffect(() => {
+        if (endDate && endDate.includes("-")) {
+            const [y, m, d] = endDate.split("-");
+            setCpEndDateDisplay(`${m}-${d}-${y}`);
+        }
+    }, [endDate]);
+
+    React.useEffect(() => {
+        if (mpStartDate && mpStartDate.includes("-")) {
+            const [y, m, d] = mpStartDate.split("-");
+            setMpStartDateDisplay(`${m}-${d}-${y}`);
+        }
+    }, [mpStartDate]);
+
+    React.useEffect(() => {
+        if (mpEndDate && mpEndDate.includes("-")) {
+            const [y, m, d] = mpEndDate.split("-");
+            setMpEndDateDisplay(`${m}-${d}-${y}`);
+        }
+    }, [mpEndDate]);
+
+    React.useEffect(() => {
+        if (anchorIncomeStartDate && anchorIncomeStartDate.includes("-")) {
+            const [y, m, d] = anchorIncomeStartDate.split("-");
+            setAiStartDateDisplay(`${m}-${d}-${y}`);
+        }
+    }, [anchorIncomeStartDate]);
+
+    React.useEffect(() => {
+        if (anchorIncomeEndDate && anchorIncomeEndDate.includes("-")) {
+            const [y, m, d] = anchorIncomeEndDate.split("-");
+            setAiEndDateDisplay(`${m}-${d}-${y}`);
+        }
+    }, [anchorIncomeEndDate]);
 
     const handleRunMPSimulation = async () => {
         if (!mpAllocations || !mpCapital) return;
@@ -141,7 +193,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                 initial_capital: Number(anchorIncomeCapital),
                 start_date: anchorIncomeStartDate,
                 end_date: anchorIncomeEndDate,
-                reinvest_income: anchorIncomeReinvest
+                reinvest_pct: anchorIncomeReinvestPct
             };
             const res = await postAnchorIncomeSimulate(params);
             setAnchorIncomeSimulationData(res);
@@ -410,12 +462,38 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                     <div className="flex flex-col gap-5 mt-6 border-t border-zinc-100 dark:border-zinc-800 pt-5">
                                         <div className="flex flex-col md:flex-row gap-4">
                                             <div className="space-y-2 flex-1 relative">
-                                                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Simulation Start Date</label>
-                                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 placeholder:text-zinc-500" />
+                                                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Simulation Start Date (MM-DD-YYYY)</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="MM-DD-YYYY"
+                                                    value={cpStartDateDisplay}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setCpStartDateDisplay(val);
+                                                        const parts = val.split("-");
+                                                        if (parts.length === 3 && parts[2]?.length === 4 && parts[0]?.length === 2 && parts[1]?.length === 2) {
+                                                            setStartDate(`${parts[2]}-${parts[0]}-${parts[1]}`);
+                                                        }
+                                                    }}
+                                                    className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 placeholder:text-zinc-500"
+                                                />
                                             </div>
                                             <div className="space-y-2 flex-1 relative">
-                                                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Simulation End Date</label>
-                                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={`flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 placeholder:text-zinc-500 ${startDate > endDate ? 'border-red-500 focus-visible:ring-red-500' : 'border-zinc-200 dark:border-zinc-800 focus-visible:ring-indigo-500'}`} />
+                                                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Simulation End Date (MM-DD-YYYY)</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="MM-DD-YYYY"
+                                                    value={cpEndDateDisplay}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setCpEndDateDisplay(val);
+                                                        const parts = val.split("-");
+                                                        if (parts.length === 3 && parts[2]?.length === 4 && parts[0]?.length === 2 && parts[1]?.length === 2) {
+                                                            setEndDate(`${parts[2]}-${parts[0]}-${parts[1]}`);
+                                                        }
+                                                    }}
+                                                    className={`flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 placeholder:text-zinc-500 ${startDate > endDate ? 'border-red-500 focus-visible:ring-red-500' : 'border-zinc-200 dark:border-zinc-800 focus-visible:ring-indigo-500'}`}
+                                                />
                                             </div>
                                         </div>
                                         <div className="space-y-2">
@@ -683,6 +761,50 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                             </BarChart>
                                                         </ResponsiveContainer>
                                                     </div>
+ 
+                                                     {/* Summary Cards */}
+                                                     {/* Summary Cards: The Big Six */}
+                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-y-6 gap-x-12 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
+                                                         {/* Row 1 */}
+                                                         <div className="flex flex-col gap-1">
+                                                             <span className="text-[10px] text-zinc-500 font-normal uppercase tracking-wider">Final Value</span>
+                                                             <span className="text-xl font-medium text-emerald-600 dark:text-emerald-400">
+                                                                 ${Number(anchorIncomeSimulationData.summary.final_strategy_value).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                             </span>
+                                                         </div>
+                                                         <div className="flex flex-col gap-1">
+                                                             <span className="text-[10px] text-zinc-500 font-normal uppercase tracking-wider">Total Return</span>
+                                                             <span className="text-xl font-medium text-emerald-600 dark:text-emerald-400">
+                                                                 {Number(anchorIncomeSimulationData.summary.total_strategy_return_pct).toFixed(1)}%
+                                                             </span>
+                                                         </div>
+                                                         <div className="flex flex-col gap-1">
+                                                             <span className="text-[10px] text-zinc-500 font-normal uppercase tracking-wider">Net Wealth</span>
+                                                             <span className="text-xl font-medium text-emerald-600 dark:text-emerald-400">
+                                                                 ${Number(anchorIncomeSimulationData.summary.final_strategy_value + anchorIncomeSimulationData.summary.total_withdrawn_income).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                             </span>
+                                                         </div>
+
+                                                         {/* Row 2 */}
+                                                         <div className="flex flex-col gap-1">
+                                                             <span className="text-[10px] text-zinc-500 font-normal uppercase tracking-wider">Total Dividends</span>
+                                                             <span className="text-xl font-medium text-emerald-600 dark:text-emerald-400">
+                                                                 ${Number(anchorIncomeSimulationData.summary.final_cumulative_income).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                             </span>
+                                                         </div>
+                                                         <div className="flex flex-col gap-1">
+                                                             <span className="text-[10px] text-zinc-500 font-normal uppercase tracking-wider">Deepest Portfolio Drop</span>
+                                                             <span className="text-xl font-medium text-rose-600 dark:text-rose-400">
+                                                                 {Number(anchorIncomeSimulationData.summary.portfolio_max_drawdown || 0).toFixed(1)}%
+                                                             </span>
+                                                         </div>
+                                                         <div className="flex flex-col gap-1">
+                                                             <span className="text-[10px] text-zinc-500 font-normal uppercase tracking-wider">Deepest QQQ Drop</span>
+                                                             <span className="text-xl font-medium text-rose-600 dark:text-rose-400">
+                                                                 {Number(anchorIncomeSimulationData.summary.qqq_max_drawdown || 0).toFixed(1)}%
+                                                             </span>
+                                                         </div>
+                                                     </div>
 
                                                     {/* Tactical Decision Log */}
                                                     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden">
@@ -697,6 +819,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                                         <TableHead className="w-[90px]">Date</TableHead>
                                                                         <TableHead className="w-[80px]">Type</TableHead>
                                                                         <TableHead>Description</TableHead>
+                                                                        <TableHead className="text-right w-[110px]">Withdrawn</TableHead>
                                                                         <TableHead className="text-right w-[110px]">Portfolio Value</TableHead>
                                                                         <TableHead className="text-right w-[100px]">Cash Balance</TableHead>
                                                                     </TableRow>
@@ -719,6 +842,9 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                                                 }`}>{evt.event_type}</Badge>
                                                                             </TableCell>
                                                                             <TableCell className="text-xs text-zinc-700 dark:text-zinc-300 py-2">{evt.description}</TableCell>
+                                                                            <TableCell className="text-xs text-right py-2 text-rose-600 font-medium">
+                                                                                {evt.withdrawn ? `-$${Number(evt.withdrawn).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
+                                                                            </TableCell>
                                                                             <TableCell className="text-xs text-right py-2 font-medium">${Number(evt.portfolio_value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
                                                                             <TableCell className="text-xs text-right py-2 text-emerald-600 dark:text-emerald-400">${Number(evt.cash_balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
                                                                         </TableRow>
@@ -978,20 +1104,36 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                                 </div>
                                                                 <div className="flex gap-4">
                                                                     <div className="space-y-1.5 flex-1">
-                                                                        <span className="text-xs text-zinc-500 font-medium">Start</span>
+                                                                        <span className="text-xs text-zinc-500 font-medium">Start (MM-DD-YYYY)</span>
                                                                         <input
-                                                                            type="date"
-                                                                            value={mpStartDate}
-                                                                            onChange={(e) => setMpStartDate(e.target.value)}
+                                                                            type="text"
+                                                                            placeholder="MM-DD-YYYY"
+                                                                            value={mpStartDateDisplay}
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                setMpStartDateDisplay(val);
+                                                                                const parts = val.split("-");
+                                                                                if (parts.length === 3 && parts[2]?.length === 4 && parts[0]?.length === 2 && parts[1]?.length === 2) {
+                                                                                    setMpStartDate(`${parts[2]}-${parts[0]}-${parts[1]}`);
+                                                                                }
+                                                                            }}
                                                                             className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 text-zinc-900 dark:text-zinc-100"
                                                                         />
                                                                     </div>
                                                                     <div className="space-y-1.5 flex-1">
-                                                                        <span className="text-xs text-zinc-500 font-medium">End</span>
+                                                                        <span className="text-xs text-zinc-500 font-medium">End (MM-DD-YYYY)</span>
                                                                         <input
-                                                                            type="date"
-                                                                            value={mpEndDate}
-                                                                            onChange={(e) => setMpEndDate(e.target.value)}
+                                                                            type="text"
+                                                                            placeholder="MM-DD-YYYY"
+                                                                            value={mpEndDateDisplay}
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                setMpEndDateDisplay(val);
+                                                                                const parts = val.split("-");
+                                                                                if (parts.length === 3 && parts[2]?.length === 4 && parts[0]?.length === 2 && parts[1]?.length === 2) {
+                                                                                    setMpEndDate(`${parts[2]}-${parts[0]}-${parts[1]}`);
+                                                                                }
+                                                                            }}
                                                                             className="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 text-zinc-900 dark:text-zinc-100"
                                                                         />
                                                                     </div>
@@ -1139,48 +1281,62 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                     </div>
                                                     <div className="flex flex-col md:flex-row gap-4">
                                                         <div className="space-y-2 flex-1">
-                                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Start Date</label>
+                                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Start Date (MM-DD-YYYY)</label>
                                                             <input
-                                                                type="date"
-                                                                value={anchorIncomeStartDate}
-                                                                onChange={(e) => setAnchorIncomeStartDate(e.target.value)}
+                                                                type="text"
+                                                                placeholder="MM-DD-YYYY"
+                                                                value={aiStartDateDisplay}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setAiStartDateDisplay(val);
+                                                                    const parts = val.split("-");
+                                                                    if (parts.length === 3 && parts[2]?.length === 4 && parts[0]?.length === 2 && parts[1]?.length === 2) {
+                                                                        setAnchorIncomeStartDate(`${parts[2]}-${parts[0]}-${parts[1]}`);
+                                                                    }
+                                                                }}
                                                                 className="flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                                             />
                                                         </div>
                                                         <div className="space-y-2 flex-1">
-                                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">End Date</label>
+                                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">End Date (MM-DD-YYYY)</label>
                                                             <input
-                                                                type="date"
-                                                                value={anchorIncomeEndDate}
-                                                                onChange={(e) => setAnchorIncomeEndDate(e.target.value)}
+                                                                type="text"
+                                                                placeholder="MM-DD-YYYY"
+                                                                value={aiEndDateDisplay}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setAiEndDateDisplay(val);
+                                                                    const parts = val.split("-");
+                                                                    if (parts.length === 3 && parts[2]?.length === 4 && parts[0]?.length === 2 && parts[1]?.length === 2) {
+                                                                        setAnchorIncomeEndDate(`${parts[2]}-${parts[0]}-${parts[1]}`);
+                                                                    }
+                                                                }}
                                                                 className="flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                                             />
                                                         </div>
                                                     </div>
 
-                                                    {/* Reinvest Income Toggle */}
-                                                    <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
-                                                        <div>
-                                                            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Reinvest Income</p>
-                                                            <p className="text-xs text-zinc-500 mt-0.5">{anchorIncomeReinvest ? "Monthly yield flows to Cash bucket (compounds)" : "Monthly yield is tracked as Withdrawn"}</p>
+                                                    {/* Reinvest Income Slider */}
+                                                    <div className="space-y-4 p-4 rounded-xl bg-indigo-50/30 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-900/30">
+                                                        <div className="flex justify-between items-center">
+                                                            <div>
+                                                                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Income Reinvestment %</p>
+                                                                <p className="text-xs text-zinc-500 mt-0.5">Portion of monthly yield that compounds in cash</p>
+                                                            </div>
+                                                            <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{anchorIncomeReinvestPct}%</span>
                                                         </div>
-                                                        <div className="flex gap-1 p-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg">
-                                                            <button
-                                                                onClick={() => setAnchorIncomeReinvest(true)}
-                                                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                                                                    anchorIncomeReinvest
-                                                                        ? 'bg-white dark:bg-zinc-950 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
-                                                                }`}
-                                                            >Yes</button>
-                                                            <button
-                                                                onClick={() => setAnchorIncomeReinvest(false)}
-                                                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                                                                    !anchorIncomeReinvest
-                                                                        ? 'bg-white dark:bg-zinc-950 text-rose-600 dark:text-rose-400 shadow-sm'
-                                                                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
-                                                                }`}
-                                                            >No</button>
+                                                        <Slider
+                                                            defaultValue={[0]}
+                                                            value={[anchorIncomeReinvestPct]}
+                                                            max={100}
+                                                            step={5}
+                                                            onValueChange={(v) => setAnchorIncomeReinvestPct(v[0])}
+                                                            className="py-2"
+                                                        />
+                                                        <div className="flex justify-between text-[10px] text-zinc-400 font-medium px-1">
+                                                            <span>0% (Withdraw All)</span>
+                                                            <span>50%</span>
+                                                            <span>100% (Reinvest All)</span>
                                                         </div>
                                                     </div>
                                                 </div>
