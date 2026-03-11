@@ -24,7 +24,7 @@ class PortfolioState:
     as_of: date
     created_at: datetime
 
-    cash_by_sleeve: Dict[str, float] = field(default_factory=lambda: {"core": 0.0, "income": 0.0})
+    cash_by_sleeve: Dict[str, float] = field(default_factory=lambda: {"core": 0.0, "income": 0.0, "tax_escrow": 0.0})
     positions: List[Position] = field(default_factory=list)
     applied_event_ids: set = field(default_factory=set)
 
@@ -36,6 +36,9 @@ class PortfolioState:
 
     def total_portfolio_value(self) -> float:
         return self.cash_total() + self.total_market_value()
+
+    def get_investable_cash(self) -> float:
+        return self.cash_by_sleeve.get("core", 0.0)
 
     def find_position(self, symbol: str, sleeve: str) -> Optional[Position]:
         for p in self.positions:
