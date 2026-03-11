@@ -19,6 +19,10 @@ import uuid
 from ai_advisory.api.plan_models import TradePlan, TradeAction
 from ai_advisory.core.plan_store import PlanStore
 from ai_advisory.strategy.strategy_unwind import StrategyUnwindEngine
+from ai_advisory.services.frontier_service import FrontierService
+from ai_advisory.services.api_models import FrontierProposalRequest, FrontierProposalResponse
+from ai_advisory.services.portfolio_analytics import run_mp_backtest
+import json
 from datetime import timedelta
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
@@ -40,6 +44,8 @@ profile_store = ProfileStore(PROFILE_PATH)
 
 PLAN_STORE_DIR = BASE_DIR / "data"
 plan_store = PlanStore(PLAN_STORE_DIR)
+
+frontier_service = FrontierService(str(STORE_ROOT))
 
 @app.post("/dev/reset")
 def dev_reset():
@@ -208,10 +214,72 @@ def simulate_concentrated_position(
     result["summary"] = summary
 
     return result
+
+class MPSimulatePayload(BaseModel):
+    target_weights: dict[str, float]
+    initial_capital: float
+    start_date: str
+    end_date: str
+
+@app.post("/programs/core_allocation/simulate")
+def simulate_mp(payload: MPSimulatePayload):
+    result = run_mp_backtest(
+        target_weights=payload.target_weights,
+        initial_capital=payload.initial_capital,
+        start_date=payload.start_date,
+        end_date=payload.end_date
+    )
+    
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+        
+    # Save to data/mp_history.json
+    history_path = BASE_DIR / "data" / "mp_history.json"
+    try:
+        with open(history_path, "w") as f:
+            json.dump(result, f, indent=2)
+    except Exception as e:
+        print(f"Failed to save mp_history: {e}")
+        
+    return result
+
+@app.get("/programs/core_allocation/history")
+def get_mp_history():
+    history_path = BASE_DIR / "data" / "mp_history.json"
+    if history_path.exists():
+        try:
+            with open(history_path, "r") as f:
+                return json.load(f)
+        except:
+            return None
+    return None
+
 @app.post("/orchestrate/propose", response_model=OrchestrateResponse)
 def orchestrate():
     profile = profile_store.load()
     return orchestrate_propose(profile)
+
+class FrontierProposePayload(BaseModel):
+    risk_score: int
+    model_id: str = "core"
+
+def get_latest_frontier_date(store_root: Path) -> str:
+    if not store_root.exists():
+        return datetime.now().strftime("%Y-%m-%d")
+    dirs = [d.name for d in store_root.iterdir() if d.is_dir() and d.name.startswith("asof=")]
+    if not dirs:
+        return datetime.now().strftime("%Y-%m-%d")
+    latest_dir = sorted(dirs)[-1]
+    return latest_dir.replace("asof=", "")
+
+@app.post("/frontier/propose", response_model=FrontierProposalResponse)
+def frontier_propose(payload: FrontierProposePayload):
+    req = FrontierProposalRequest(
+        as_of=get_latest_frontier_date(STORE_ROOT),
+        model_id=payload.model_id,
+        risk_score=payload.risk_score
+    )
+    return frontier_service.propose(req)
 
 @app.get("/health")
 def health():
