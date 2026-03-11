@@ -102,7 +102,7 @@ class SessionResponse(BaseModel):
 
 ConcentrationStatus = Literal["ok", "elevated", "breach"]
 SignalSeverity = Literal["low", "medium", "high"]
-ProgramKey = Literal["concentrated_position", "risk_reduction", "income_generation", "tax_optimization", "core_allocation"]
+ProgramKey = Literal["concentrated_position", "risk_reduction", "income_generation", "tax_optimization", "core_allocation", "anchor_income"]
 
 
 class CapitalSummary(BaseModel):

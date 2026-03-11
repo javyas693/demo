@@ -24,6 +24,7 @@ from ai_advisory.services.api_models import FrontierProposalRequest, FrontierPro
 from ai_advisory.services.portfolio_analytics import run_mp_backtest
 import json
 from ai_advisory.strategy.transition_manager import TransitionManager
+from ai_advisory.strategy.anchor_income import AnchorIncomeEngine
 from ai_advisory.frontier.store.fs_store import FileSystemFrontierStore
 from ai_advisory.services.concentrated_service import _sanitize_for_json
 from datetime import timedelta
@@ -81,9 +82,6 @@ def get_session():
     return SessionResponse(has_profile=has_profile, profile=profile)
 
 
-@app.on_event("startup")
-def _startup_reset():
-    profile_store.clear()
 
 @app.get("/capital/summary")
 def capital_summary():
@@ -98,23 +96,24 @@ def signals():
     return SignalsResponse(signals=sigs)
 
 
+PROGRAM_MAP = {
+    "concentrated_position": ("Concentrated Position Workspace", "Manage large single-stock exposures, risk reduction, and covered calls."),
+    "risk_reduction": ("Risk Reduction Workspace", "Monitoring and active adjustments for risk reduction."),
+    "tax_optimization": ("Tax Optimization Workspace", "Monitoring and active adjustments for tax optimization."),
+    "income_generation": ("Income Generation Workspace", "Monitoring and active adjustments for income generation."),
+    "core_allocation": ("Core Allocation Workspace", "Monitoring and active adjustments for core allocation."),
+    "anchor_income": ("Anchor Income Strategy", "Tactical income generation with drawdown-based equity swaps.")
+}
+
 @app.get("/programs/{program_key}", response_model=ProgramWorkspaceResponse)
 def program_workspace(program_key: str):
     profile = profile_store.load()
     sigs = [s for s in compute_signals(profile) if s.program == program_key]
 
-    # Minimal per-program scaffolding (UI stable; engines can fill later)
-    program_map = {
-        "concentrated_position": ("Concentrated Position Workspace", "Manage large single-stock exposures, risk reduction, and covered calls."),
-        "risk_reduction": ("Risk Reduction Workspace", "Monitoring and active adjustments for risk reduction."),
-        "tax_optimization": ("Tax Optimization Workspace", "Monitoring and active adjustments for tax optimization."),
-        "income_generation": ("Income Generation Workspace", "Monitoring and active adjustments for income generation."),
-        "core_allocation": ("Core Allocation Workspace", "Monitoring and active adjustments for core allocation."),
-    }
-    if program_key not in program_map:
+    if program_key not in PROGRAM_MAP:
         raise HTTPException(status_code=404, detail=f"Unknown program_key: {program_key}")
 
-    title, subtitle = program_map[program_key]
+    title, subtitle = PROGRAM_MAP[program_key]
 
     status = "active"
     if any(s.severity in ("medium", "high") for s in sigs):
@@ -140,6 +139,12 @@ def program_workspace(program_key: str):
         summary_cards = [
             {"label": "Income (Quarter)", "value": "$4,250", "tag": "Received"},
             {"label": "Income Target", "value": "On Track", "tag": None},
+        ]
+    elif program_key == "anchor_income":
+        summary_cards = [
+            {"label": "Parking Lot Yield", "value": "10.8%", "tag": "Targeted"},
+            {"label": "Current Drawdown", "value": "0.0%", "tag": "Monitoring"},
+            {"label": "Total Portfolio", "value": "$1,000,000", "tag": "Estimated"},
         ]
     else:  # core_allocation
         summary_cards = [
@@ -168,9 +173,7 @@ def simulate_concentrated_position(
     end_date: str | None = None,
     loss_handling_mode: str = "harvest_hold",
     starting_cash: float = 0.0,
-    max_shares_per_month: int = 200,
-    start_date: str | None = None,
-    end_date: str | None = None
+    max_shares_per_month: int = 200
 ):
     profile = profile_store.load()
     if not profile.positions:
@@ -257,6 +260,45 @@ def get_mp_history():
         except:
             return None
     return None
+
+class AnchorIncomeSimulatePayload(BaseModel):
+    start_date: str
+    end_date: str
+    initial_capital: float = 1000000.0
+    reinvest_income: bool = True
+
+@app.post("/programs/anchor_income/simulate")
+def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
+    try:
+        engine = AnchorIncomeEngine(
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            initial_capital=payload.initial_capital,
+            reinvest_income=payload.reinvest_income
+        )
+        result = engine.simulate()
+        
+        # Save to history file for persistence in UI tab
+        history_path = BASE_DIR / "data" / "anchor_income_history.json"
+        with open(history_path, "w") as f:
+            json.dump(result, f, indent=2)
+            
+        return result
+    except Exception as e:
+        print(f"Failed to simulate anchor income: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/programs/anchor_income/history")
+def get_anchor_income_history():
+    history_path = BASE_DIR / "data" / "anchor_income_history.json"
+    if history_path.exists():
+        try:
+            with open(history_path, "r") as f:
+                return json.load(f)
+        except:
+            return None
+    return None
+
 
 @app.post("/api/v1/programs/transition/propose", response_model=CombinedTradePlan)
 def propose_transition(req: TransitionRequest):

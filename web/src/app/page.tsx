@@ -4,7 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { Sparkles, AlertTriangle } from "lucide-react"
 
-import { session } from "@/lib/api"
+import { session, patchProfile } from "@/lib/api"
 import { WelcomeLanding } from "@/components/welcome-landing"
 import { MainAppClient } from "@/components/main-app-client"
 
@@ -52,7 +52,12 @@ export default function Home() {
   }
 
   if (hasProfile === false) {
-    return <WelcomeLanding onGetStarted={() => {
+    return <WelcomeLanding onGetStarted={async () => {
+      try {
+        await patchProfile({ cash_to_invest: 1000000, risk_score: 65, positions: [] });
+      } catch (e) {
+        console.error("Failed to persist initial profile", e);
+      }
       setHasProfile(true);
       setShowBanner(true);
     }} />;

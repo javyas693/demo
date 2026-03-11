@@ -13,8 +13,11 @@ class ProfileStore:
 
     def load(self) -> ClientProfile:
         if not self.path.exists():
-            # default empty profile
-            return ClientProfile()
+            # GUARDRAIL: Automatically create and save a persistent default profile
+            # to prevent the UI from getting stuck in a "Welcome Landing" loop
+            default_profile = ClientProfile(cash_to_invest=1000000.0, risk_score=65)
+            self.save(default_profile)
+            return default_profile
 
         data = json.loads(self.path.read_text(encoding="utf-8"))
         return ClientProfile.model_validate(data)

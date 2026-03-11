@@ -175,7 +175,7 @@ export function CapitalSummary({ onSelectProgram }: { onSelectProgram: (p: strin
                         </CardContent>
                     </Card>
 
-                    <Card className="cursor-pointer hover:shadow-md transition-shadow border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950" onClick={() => onSelectProgram('income_strategy')}>
+                    <Card className="cursor-pointer hover:shadow-md transition-shadow border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950" onClick={() => onSelectProgram('anchor_income')}>
                         <CardContent className="p-6 flex flex-col justify-between h-full space-y-4 opacity-70">
                             <div className="flex items-center justify-between">
                                 <h3 className="font-medium text-zinc-900 dark:text-zinc-100">Income Strategy</h3>

@@ -11,8 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { MetricCard } from "@/components/ui/metric-card"
 import { motion, AnimatePresence } from "motion/react"
-import { simulateScenario, program as getProgram, postPlanPropose, postPlanCommit, ProgramWorkspaceResponse, TradePlan, simulateConcentratedPosition, SimulationResult, patchProfile, postFrontierPropose, FrontierProposalResponse, postMPSimulate, getMPHistory } from "@/lib/api"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { simulateScenario, program as getProgram, postPlanPropose, postPlanCommit, ProgramWorkspaceResponse, TradePlan, simulateConcentratedPosition, SimulationResult, patchProfile, postFrontierPropose, FrontierProposalResponse, postMPSimulate, getMPHistory, postAnchorIncomeSimulate, getAnchorIncomeHistory } from "@/lib/api"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ScatterChart, Scatter, ReferenceLine, ZAxis, BarChart, Bar } from 'recharts';
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { useRouter } from "next/navigation"
 
@@ -92,6 +92,15 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     const [mpSimIsLoading, setMpSimIsLoading] = React.useState(false);
     const [mpLastRunRef, setMpLastRunRef] = React.useState<{ start: string, end: string } | null>(null);
 
+    // Anchor Income Strategy State
+    const [anchorIncomeCapital, setAnchorIncomeCapital] = React.useState<number | "">(1000000);
+    const [anchorIncomeStartDate, setAnchorIncomeStartDate] = React.useState(getTenYearsAgoStr());
+    const [anchorIncomeEndDate, setAnchorIncomeEndDate] = React.useState(getTodayStr());
+    const [anchorIncomeSimulationData, setAnchorIncomeSimulationData] = React.useState<any>(null);
+    const [anchorIncomeSimIsLoading, setAnchorIncomeSimIsLoading] = React.useState(false);
+    const [anchorIncomeLastRunRef, setAnchorIncomeLastRunRef] = React.useState<{ start: string, end: string } | null>(null);
+    const [anchorIncomeReinvest, setAnchorIncomeReinvest] = React.useState(true);
+
     const handleRunMPSimulation = async () => {
         if (!mpAllocations || !mpCapital) return;
         setMpSimIsLoading(true);
@@ -124,6 +133,27 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
         }
     };
 
+    const handleRunAnchorIncomeSimulation = async () => {
+        if (!anchorIncomeCapital) return;
+        setAnchorIncomeSimIsLoading(true);
+        try {
+            const params = {
+                initial_capital: Number(anchorIncomeCapital),
+                start_date: anchorIncomeStartDate,
+                end_date: anchorIncomeEndDate,
+                reinvest_income: anchorIncomeReinvest
+            };
+            const res = await postAnchorIncomeSimulate(params);
+            setAnchorIncomeSimulationData(res);
+            setAnchorIncomeLastRunRef({ start: anchorIncomeStartDate, end: anchorIncomeEndDate });
+            setActiveTab("historical"); // Auto navigate to History on success
+        } catch (e) {
+            console.error("Simulation failed", e);
+        } finally {
+            setAnchorIncomeSimIsLoading(false);
+        }
+    };
+
     React.useEffect(() => {
         async function load() {
             try {
@@ -148,6 +178,13 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                     setMpLastRunRef(prev => prev || { start: "Persisted", end: "Backtest" });
                 }
             }).catch(e => console.error("Failed to load mp history", e));
+        } else if (programKey === 'anchor_income' && activeTab === 'historical') {
+            getAnchorIncomeHistory().then(data => {
+                if (data && data.summary) {
+                    setAnchorIncomeSimulationData(data);
+                    setAnchorIncomeLastRunRef(prev => prev || { start: "Persisted", end: "Backtest" });
+                }
+            }).catch(e => console.error("Failed to load anchor income history", e));
         }
     }, [programKey, activeTab]);
 
@@ -590,6 +627,110 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                             </>
                                         )}
                                     </div>
+                                ) : programKey === 'anchor_income' ? (
+                                    <div className="space-y-8 animate-in fade-in zoom-in-95 duration-300">
+                                        <div className="flex items-center justify-between px-2">
+                                            <h4 className="flex flex-col py-1">
+                                                <span className="text-sm font-medium flex items-center gap-2">Anchor Income Performance <Badge variant="secondary" className="text-[10px] bg-zinc-100 dark:bg-zinc-800 font-normal">Backtest</Badge></span>
+                                                {anchorIncomeLastRunRef && (
+                                                    <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Simulation: {anchorIncomeLastRunRef.start} → {anchorIncomeLastRunRef.end}</span>
+                                                )}
+                                            </h4>
+                                        </div>
+
+                                        {!anchorIncomeSimulationData ? (
+                                            <div className="flex flex-col items-center justify-center py-16 px-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/20">
+                                                <Activity className="h-8 w-8 text-zinc-300 mb-4" />
+                                                <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-2">No simulation results yet.</h3>
+                                                <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-sm mb-6">
+                                                    Go to the Current tab to set parameters and run a simulation.
+                                                </p>
+                                            </div>
+                                        ) : (() => {
+                                            const events: any[] = anchorIncomeSimulationData.events || [];
+                                            return (
+                                                <>
+                                                    {/* Strategy Line Chart */}
+                                                    <div className="h-[340px] w-full bg-white dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800 rounded-xl p-4">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <LineChart data={anchorIncomeSimulationData.time_series}>
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                                                                <XAxis dataKey="Date" tickFormatter={(val) => new Date(val).toLocaleDateString()} minTickGap={30} fontSize={12} stroke="#a1a1aa" />
+                                                                <YAxis tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} fontSize={12} stroke="#a1a1aa" domain={['auto', 'auto']} />
+                                                                <RechartsTooltip
+                                                                    labelFormatter={(val) => new Date(val).toLocaleDateString()}
+                                                                    formatter={(value: any, name: any) => [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, name.replace(/_/g, " ")]}
+                                                                />
+                                                                <Legend />
+                                                                <Line type="monotone" dataKey="Strategy_Value" stroke="#10b981" dot={false} strokeWidth={2} name="Strategy Value" />
+                                                                <Line type="monotone" dataKey="Pure_QQQ_Value" stroke="#6366f1" dot={false} strokeWidth={2} name="Pure QQQ" />
+                                                            </LineChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+
+                                                    {/* Income Bar Chart */}
+                                                    <div className="h-[180px] w-full bg-white dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800 rounded-xl p-4">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <BarChart data={anchorIncomeSimulationData.time_series}>
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                                                                <XAxis dataKey="Date" tick={false} axisLine={false} height={10} />
+                                                                <YAxis tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} fontSize={12} stroke="#a1a1aa" orientation="right" />
+                                                                <RechartsTooltip
+                                                                    labelFormatter={(val) => new Date(val).toLocaleDateString()}
+                                                                    formatter={(value: any) => [`$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, "Cumulative Income"]}
+                                                                />
+                                                                <Bar dataKey="Cumulative_Income" fill="#f59e0b" name="Cumulative Paid to Wait" />
+                                                            </BarChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+
+                                                    {/* Tactical Decision Log */}
+                                                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden">
+                                                        <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between">
+                                                            <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">Tactical Decision Log</h3>
+                                                            <Badge variant="outline" className="text-xs">{events.length} events</Badge>
+                                                        </div>
+                                                        <div className="max-h-[400px] overflow-auto">
+                                                            <Table>
+                                                                <TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/20 sticky top-0 backdrop-blur-sm z-10">
+                                                                    <TableRow>
+                                                                        <TableHead className="w-[90px]">Date</TableHead>
+                                                                        <TableHead className="w-[80px]">Type</TableHead>
+                                                                        <TableHead>Description</TableHead>
+                                                                        <TableHead className="text-right w-[110px]">Portfolio Value</TableHead>
+                                                                        <TableHead className="text-right w-[100px]">Cash Balance</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {events.length === 0 ? (
+                                                                        <TableRow>
+                                                                            <TableCell colSpan={5} className="text-center py-6 text-zinc-500">No tactical events recorded during simulation</TableCell>
+                                                                        </TableRow>
+                                                                    ) : events.map((evt: any, i: number) => (
+                                                                        <TableRow key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30">
+                                                                            <TableCell className="font-mono text-xs text-zinc-500 py-2 whitespace-nowrap">{evt.date}</TableCell>
+                                                                            <TableCell className="py-2">
+                                                                                <Badge className={`text-[10px] font-medium ${
+                                                                                    evt.event_type === 'Income' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                                                                    evt.event_type === 'Trigger' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                                                    evt.event_type === 'Trade' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
+                                                                                    evt.event_type === 'Reset' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                                                    'bg-zinc-100 text-zinc-600'
+                                                                                }`}>{evt.event_type}</Badge>
+                                                                            </TableCell>
+                                                                            <TableCell className="text-xs text-zinc-700 dark:text-zinc-300 py-2">{evt.description}</TableCell>
+                                                                            <TableCell className="text-xs text-right py-2 font-medium">${Number(evt.portfolio_value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                                                                            <TableCell className="text-xs text-right py-2 text-emerald-600 dark:text-emerald-400">${Number(evt.cash_balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
                                 ) : null}
                             </TabsContent>
 
@@ -636,7 +777,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                 )}
 
                                 <div className={programKey === 'concentrated_position' ? "grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8" : "mt-8"}>
-                                    {programKey !== 'core_allocation' && (
+                                    {programKey !== 'core_allocation' && programKey !== 'anchor_income' && (
                                         <Card className="border-indigo-100 dark:border-indigo-900/30 overflow-hidden relative shadow-sm">
                                             <CardHeader>
                                                 <CardTitle className="flex items-center gap-2 text-base">
@@ -968,6 +1109,86 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                         </div>
                                                     </div>
                                                 )}
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
+                                    {/* Anchor Income Strategy Card */}
+                                    {programKey === 'anchor_income' && (
+                                        <Card className="border-indigo-100 dark:border-indigo-900/30 overflow-hidden relative shadow-sm">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2 text-base">Anchor Income Strategy</CardTitle>
+                                                <CardDescription>Configure parameters for the drawdown-based income strategy.</CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-6">
+                                                <div className="space-y-6 pt-2">
+                                                    <div className="space-y-2">
+                                                        <label className="text-sm font-medium">Initial Capital</label>
+                                                        <div className="relative">
+                                                            <div className="absolute left-3 top-2.5 text-zinc-500 text-sm pointer-events-none">$</div>
+                                                            <input
+                                                                type="text"
+                                                                value={anchorIncomeCapital}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setAnchorIncomeCapital(val === "" ? "" : Number(val));
+                                                                }}
+                                                                className="flex h-10 w-full rounded-md border text-sm px-3 py-2 pl-7 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 border-zinc-200 dark:border-zinc-800 focus-visible:ring-indigo-500"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col md:flex-row gap-4">
+                                                        <div className="space-y-2 flex-1">
+                                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Start Date</label>
+                                                            <input
+                                                                type="date"
+                                                                value={anchorIncomeStartDate}
+                                                                onChange={(e) => setAnchorIncomeStartDate(e.target.value)}
+                                                                className="flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2 flex-1">
+                                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">End Date</label>
+                                                            <input
+                                                                type="date"
+                                                                value={anchorIncomeEndDate}
+                                                                onChange={(e) => setAnchorIncomeEndDate(e.target.value)}
+                                                                className="flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Reinvest Income Toggle */}
+                                                    <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
+                                                        <div>
+                                                            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Reinvest Income</p>
+                                                            <p className="text-xs text-zinc-500 mt-0.5">{anchorIncomeReinvest ? "Monthly yield flows to Cash bucket (compounds)" : "Monthly yield is tracked as Withdrawn"}</p>
+                                                        </div>
+                                                        <div className="flex gap-1 p-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg">
+                                                            <button
+                                                                onClick={() => setAnchorIncomeReinvest(true)}
+                                                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                                                    anchorIncomeReinvest
+                                                                        ? 'bg-white dark:bg-zinc-950 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                                                                }`}
+                                                            >Yes</button>
+                                                            <button
+                                                                onClick={() => setAnchorIncomeReinvest(false)}
+                                                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                                                    !anchorIncomeReinvest
+                                                                        ? 'bg-white dark:bg-zinc-950 text-rose-600 dark:text-rose-400 shadow-sm'
+                                                                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                                                                }`}
+                                                            >No</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                                                    <Button onClick={handleRunAnchorIncomeSimulation} disabled={anchorIncomeSimIsLoading} size="lg" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                                                        {anchorIncomeSimIsLoading ? "Simulating..." : "Run Historical Simulation"}
+                                                    </Button>
+                                                </div>
                                             </CardContent>
                                         </Card>
                                     )}
