@@ -193,45 +193,66 @@ def program_workspace(program_key: str):
         tabs=["overview", "allocation", "historical", "future", "trades"],
     )
 
-@app.get("/programs/concentrated_position/simulate")
-def simulate_concentrated_position(
-    coverage_pct: float = 50.0,
-    target_delta: float = 0.20,
-    target_dte_days: int = 30,
-    profit_capture_pct: float = 0.50,
-    share_reduction_trigger_pct: float = 0.0,
-    start_date: str | None = None,
-    end_date: str | None = None,
-    loss_handling_mode: str = "harvest_hold",
-    starting_cash: float = 0.0,
+@app.get("/programs/concentrated_position/history")
+def get_cp_history():
+    history_path = BASE_DIR / "data" / "cp_history.json"
+    if history_path.exists():
+        try:
+            with open(history_path, "r") as f:
+                return json.load(f)
+        except:
+            return None
+    return None
+
+class ConcentratedSimulatePayload(BaseModel):
+    symbol: str
+    initial_shares: int
+    cost_basis: float
+    starting_cash: float
+    coverage_pct: float = 50.0
+    target_delta: float = 0.20
+    target_dte_days: int = 30
+    profit_capture_pct: float = 0.50
+    share_reduction_trigger_pct: float = 0.0
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    loss_handling_mode: str = "harvest_hold"
     max_shares_per_month: int = 200
-):
+
+@app.post("/programs/concentrated_position/simulate")
+def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
+    # Isolated Repair: Map exactly from payload
+    ticker = payload.symbol
+    initial_shares = payload.initial_shares
+    cost_basis = payload.cost_basis
+    starting_cash = payload.starting_cash
+    
+    # Debug print for verification
+    print(f"CONCENTRATED START - Ticker: {ticker} | Basis: {cost_basis} | Cash: {starting_cash}")
+
     profile = profile_store.load()
-    if not profile.positions:
-        raise HTTPException(status_code=400, detail="No concentrated position found")
+    # Use the ticker from payload, ignore profile symbol for simulation specifically
 
-    pos = profile.positions[0]
-
-    end_date_str = end_date if end_date else datetime.now().strftime("%Y-%m-%d")
-    start_date_str = start_date if start_date else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    end_date_str = payload.end_date if payload.end_date else datetime.now().strftime("%Y-%m-%d")
+    start_date_str = payload.start_date if payload.start_date else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
     engine = StrategyUnwindEngine(
-        ticker=pos.symbol,
-        start_date=start_date if start_date else start_date_str,
-        end_date=end_date if end_date else end_date_str,
-        initial_shares=pos.shares
+        ticker=ticker,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        initial_shares=initial_shares
     )
 
     result = engine.run_covered_call_overlay(
-        coverage_pct=coverage_pct,
-        target_dte_days=target_dte_days,
-        target_delta=target_delta,
-        profit_capture_pct=profit_capture_pct,
-        share_reduction_trigger_pct=share_reduction_trigger_pct,
-        cost_basis=pos.cost_basis,
-        loss_handling_mode=loss_handling_mode,
+        coverage_pct=payload.coverage_pct,
+        target_dte_days=payload.target_dte_days,
+        target_delta=payload.target_delta,
+        profit_capture_pct=payload.profit_capture_pct,
+        share_reduction_trigger_pct=payload.share_reduction_trigger_pct,
+        cost_basis=cost_basis,
+        loss_handling_mode=payload.loss_handling_mode,
         starting_cash=starting_cash,
-        max_shares_per_month=max_shares_per_month
+        max_shares_per_month=payload.max_shares_per_month
     )
 
     print("DEBUG RESULT KEYS:", result.keys())

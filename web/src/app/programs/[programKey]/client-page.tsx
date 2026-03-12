@@ -293,6 +293,10 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                 });
 
                 const res = await simulateConcentratedPosition({
+                    symbol: inputSymbol || "AAPL",
+                    initial_shares: Number(inputShares) || 0,
+                    cost_basis: Number(inputCostBasis) || 0,
+                    starting_cash: Number(inputStartingCash) || 0,
                     coverage_pct: coveredPct,
                     target_delta: targetDelta,
                     target_dte_days: targetDteDays,
@@ -301,7 +305,6 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                     start_date: startDate,
                     end_date: endDate,
                     loss_handling_mode: lossHandlingMode,
-                    starting_cash: Number(inputStartingCash) || 0,
                     max_shares_per_month: Number(inputMaxSharesPerMonth) || 200
                 });
                 setSimulationData(res);

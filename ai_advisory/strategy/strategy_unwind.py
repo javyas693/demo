@@ -425,8 +425,12 @@ class StrategyUnwindEngine:
         total_shares_sold_on_call_loss = 0
         total_realized_option_pnl = 0.0
         
-        audit_log = []
-
+        # Audit log initialization
+        audit_log = [
+            f"{df.index[0].date()} | INITIALIZE | CONCENTRATED START\n"
+            f"Basis: ${state.cost_basis:,.2f} | Cash: ${state.cash:,.2f} | Shares: {int(state.shares)}"
+        ]
+        
         # Monthly sale tracking
         shares_sold_this_month = 0
         current_month = None
@@ -522,42 +526,48 @@ class StrategyUnwindEngine:
                         loss_amt = abs(realized_option_pnl)
                         total_realized_option_loss += loss_amt
 
-                        # Evaluate option loss offset / strategy
-                        reason = ""
-                        trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
-                        gain_per_share = current_price - state.cost_basis
-                        
-                        if gain_per_share <= 0:
+                        # Isolated Repair: Dynamic Mode Switching
+                        # Harvest only if Price < Basis. Otherwise Premium Collection (Tax Neutral)
+                        if current_price < state.cost_basis:
+                            current_strategy_key = "harvest"
+                            mode_label = "HARVEST_MODE"
+                            reason = "harvest_mode"
                             shares_required = 0
-                            reason = "no_gain_available"
                         else:
-                            shares_required = int(floor(loss_amt / gain_per_share))
+                            current_strategy_key = "tax_neutral"
+                            mode_label = "PREMIUM_COLLECTION"
                             
-                            remaining_monthly_capacity = max_shares_per_month - shares_sold_this_month
-                            
-                            if remaining_monthly_capacity <= 0:
+                            gain_per_share = current_price - state.cost_basis
+                            if gain_per_share <= 0:  # Exactly at basis
                                 shares_required = 0
-                                reason = "monthly_cap_reached"
+                                reason = "no_gain_available"
                             else:
-                                shares_required = min(
-                                    shares_required,
-                                    remaining_monthly_capacity,
-                                    int(state.shares)
-                                )
-                                if strategy_key == "tax_neutral":
+                                shares_required = int(floor(loss_amt / gain_per_share))
+                                
+                                remaining_monthly_capacity = max_shares_per_month - shares_sold_this_month
+                                
+                                if remaining_monthly_capacity <= 0:
+                                    shares_required = 0
+                                    reason = "monthly_cap_reached"
+                                else:
+                                    shares_required = min(
+                                        shares_required,
+                                        remaining_monthly_capacity,
+                                        int(state.shares)
+                                    )
+                                    
+                                    trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
                                     if current_price < trigger_px:
                                         reason = "trigger_not_met"
                                     else:
                                         reason = "trigger_met"
-                                else:
-                                    reason = "trigger_not_met"
-                                    
+
                         logger.debug(
                             f"LOSS={loss_amt:.2f} "
-                            f"GAIN_PER_SHARE={gain_per_share:.2f} "
-                            f"SHARES_REQUIRED={shares_required}"
+                            f"MODE={mode_label} "
+                            f"REASON={reason}"
                         )
-                        
+
                         sim_state = SimState(shares=state.shares, cost_basis=state.cost_basis, cash=state.cash, price=current_price)
                         sim_params = SimParams(
                             sell_shares=shares_required, 
@@ -566,7 +576,7 @@ class StrategyUnwindEngine:
                             trigger_percent=share_reduction_trigger_pct
                         )
                         
-                        strat_res = runner.run(strategy_key, sim_state, sim_params)
+                        strat_res = runner.run(current_strategy_key, sim_state, sim_params)
                         
                         shares_sold = strat_res.get("shares_sold", 0)
                         cash_gen = strat_res.get("cash_generated", 0.0)
@@ -584,26 +594,17 @@ class StrategyUnwindEngine:
 
                         total_shares_sold_on_call_loss += int(shares_sold)
 
-                        total_shares_sold_on_call_loss += int(shares_sold)
-
-                        # Now log what actually happened
+                        # Log the event with correct mode label
                         if not exit_reason:
                             exit_reason = "CLOSE_STOP"
                             
-                        # Format the log precisely per requirements
-                        if strategy_key == "harvest" or action_str == "HARVEST_ONLY":
-                            reason = "harvest_mode"
-                            base_log = (
-                                f"{date.date()} | {exit_reason} | {action_str}\n"
-                                f"reason={reason}\n"
-                                f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f}"
-                            )
-                        else:
-                            base_log = (
-                                f"{date.date()} | {exit_reason} | {action_str}\n"
-                                f"reason={reason}\n"
-                                f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}"
-                            )
+                        base_log = (
+                            f"{date.date()} | {exit_reason} | {action_str}\n"
+                            f"mode={mode_label} | reason={reason}\n"
+                            f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f}"
+                        )
+                        if current_strategy_key == "tax_neutral" and action_str != "NO-SELL":
+                             base_log += f" | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}"
                         
                         financials_log = f"opt_loss=${loss_amt:,.0f} | taxes=${taxes_paid:,.0f} | tlh=${tlh_add:,.0f} | tlh_total=${state.cumulative_tlh:,.0f}"
                         
