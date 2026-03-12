@@ -231,3 +231,6 @@ verify_*
 web/node_modules/
 web/.next/
 package-lock.json
+
+# vscode
+.vscode/

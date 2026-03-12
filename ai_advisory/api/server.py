@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
-
+from ai_advisory.agent.bot import ChatSessionManager
 from ai_advisory.services.http_models import ClientProfile, ProfilePatch, OrchestrateResponse
 from ai_advisory.services.profile_store import ProfileStore
 from ai_advisory.services.orchestrator_service import propose as orchestrate_propose
@@ -30,6 +30,9 @@ from ai_advisory.services.concentrated_service import _sanitize_for_json
 from datetime import timedelta
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
+
+# Single instance of ChatSessionManager
+session_manager = ChatSessionManager()
 
 app.add_middleware(
     CORSMiddleware,
@@ -449,6 +452,29 @@ def health():
         "store_root": str(STORE_ROOT),
     }
 
+class ChatRequest(BaseModel):
+    conversation_id: Optional[str] = None
+    message: str
+@router.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    """
+    Sends a message to the AI agent and returns the response.
+    """
+    conversation_id = request.conversation_id
+    
+    if not conversation_id:
+        conversation_id = str(uuid.uuid4())
+        
+    try:
+        agent_response = await session_manager.send_message(
+            message=request.message,
+            conversation_id=conversation_id,
+            user_id="web-user"
+        )
+        
+        return agent_response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
 @app.post("/risk/score")
 def risk_score(payload: dict):
