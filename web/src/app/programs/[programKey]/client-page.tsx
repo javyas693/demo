@@ -187,7 +187,11 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
 
     const handleRunAnchorIncomeSimulation = async () => {
         if (!anchorIncomeCapital) return;
+        
+        // 2. THE "CLEAN SLATE" INITIALIZATION: Clear previous results from UI
+        setAnchorIncomeSimulationData(null);
         setAnchorIncomeSimIsLoading(true);
+        
         try {
             const params = {
                 initial_capital: Number(anchorIncomeCapital),

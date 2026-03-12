@@ -28,12 +28,14 @@ from ai_advisory.strategy.anchor_income import AnchorIncomeEngine
 from ai_advisory.frontier.store.fs_store import FileSystemFrontierStore
 from ai_advisory.services.concentrated_service import _sanitize_for_json
 from datetime import timedelta
+from fastapi.responses import JSONResponse as jsonify
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
 
+# CORS must be initialized immediately to handle all incoming origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"], # More permissive for dev connectivity
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -267,23 +269,27 @@ class AnchorIncomeSimulatePayload(BaseModel):
     initial_capital: float = 1000000.0
     reinvest_pct: float = 0.0
 
-@app.post("/programs/anchor_income/simulate")
-def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
+@app.api_route("/programs/anchor_income/simulate", methods=["POST", "OPTIONS"])
+async def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
     try:
+        # 3. ENVIRONMENT DUALITY: Hard reset to payload capital
+        # REMOVED: Auto-cloning of live account state to prioritize payload start
+        initial_capital = payload.initial_capital
+        
         engine = AnchorIncomeEngine(
             start_date=payload.start_date,
             end_date=payload.end_date,
-            initial_capital=payload.initial_capital,
+            initial_capital=initial_capital,
             reinvest_pct=payload.reinvest_pct
         )
         result = engine.simulate()
         
-        # Save to history file for persistence in UI tab
+        # Save to history file for persistence in UI tab (Local Cache, not User Account)
         history_path = BASE_DIR / "data" / "anchor_income_history.json"
         with open(history_path, "w") as f:
             json.dump(result, f, indent=2)
             
-        return result
+        return jsonify(result)
     except Exception as e:
         print(f"Failed to simulate anchor income: {e}")
         raise HTTPException(status_code=400, detail=str(e))
