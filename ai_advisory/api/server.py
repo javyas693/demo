@@ -3,6 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
+from typing import Optional
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env
+load_dotenv()
 from ai_advisory.agent.bot import ChatSessionManager
 from ai_advisory.services.http_models import ClientProfile, ProfilePatch, OrchestrateResponse
 from ai_advisory.services.profile_store import ProfileStore
@@ -28,15 +34,21 @@ from ai_advisory.strategy.anchor_income import AnchorIncomeEngine
 from ai_advisory.frontier.store.fs_store import FileSystemFrontierStore
 from ai_advisory.services.concentrated_service import _sanitize_for_json
 from datetime import timedelta
+from fastapi.responses import JSONResponse as jsonify
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
 
 # Single instance of ChatSessionManager
 session_manager = ChatSessionManager()
 
+# MOCK STATE FOR LOGIN
+# In a real app, this would be handled via tokens/cookies
+MOCK_LOGGED_IN = False
+
+# CORS must be initialized immediately to handle all incoming origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"], # More permissive for dev connectivity
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,6 +83,7 @@ def patch_profile(patch: ProfilePatch):
 @app.get("/session", response_model=SessionResponse)
 def get_session():
     profile = profile_store.load()
+    global MOCK_LOGGED_IN
 
     positions = getattr(profile, "positions", None) or []
     cash = getattr(profile, "cash_to_invest", None)
@@ -82,7 +95,23 @@ def get_session():
         or (len(positions) > 0)
     )
 
-    return SessionResponse(has_profile=has_profile, profile=profile)
+    return SessionResponse(
+        has_profile=has_profile,
+        is_logged_in=MOCK_LOGGED_IN,
+        profile=profile
+    )
+
+@app.post("/login")
+def login():
+    global MOCK_LOGGED_IN
+    MOCK_LOGGED_IN = True
+    return {"status": "success", "is_logged_in": True}
+
+@app.post("/logout")
+def logout():
+    global MOCK_LOGGED_IN
+    MOCK_LOGGED_IN = False
+    return {"status": "success", "is_logged_in": False}
 
 
 
@@ -270,8 +299,8 @@ class AnchorIncomeSimulatePayload(BaseModel):
     initial_capital: float = 1000000.0
     reinvest_pct: float = 0.0
 
-@app.post("/programs/anchor_income/simulate")
-def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
+@app.api_route("/programs/anchor_income/simulate", methods=["POST", "OPTIONS"])
+async def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
     try:
         engine = AnchorIncomeEngine(
             start_date=payload.start_date,
@@ -286,7 +315,7 @@ def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
         with open(history_path, "w") as f:
             json.dump(result, f, indent=2)
             
-        return result
+        return jsonify(result)
     except Exception as e:
         print(f"Failed to simulate anchor income: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -455,7 +484,7 @@ def health():
 class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     message: str
-@router.post("/chat")
+@app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """
     Sends a message to the AI agent and returns the response.

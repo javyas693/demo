@@ -5,9 +5,7 @@ from google.genai import types
 # ADK currently supports GeminiModel but lets just pass model string directly to Agent if using default
 from google.adk.models.anthropic_llm import AnthropicLlm
 
-from src.config import settings
-from src.domain.questions import RISK_QUESTIONS
-from src.agent.tools import AGENT_TOOLS
+from ai_advisory.agent.tools import AGENT_TOOLS
 import json
 
 def get_system_instruction() -> str:
