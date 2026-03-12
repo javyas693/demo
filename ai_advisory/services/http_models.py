@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ConfigDict
 class SessionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     has_profile: bool
+    is_logged_in: bool
     profile: "ClientProfile"  # forward ref to your existing model
 
 
@@ -93,6 +94,7 @@ class OrchestrateResponse(BaseModel):
 class SessionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     has_profile: bool
+    is_logged_in: bool
     profile: ClientProfile
 
 

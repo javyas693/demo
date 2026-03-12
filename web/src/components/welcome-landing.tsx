@@ -5,17 +5,16 @@ import { motion, AnimatePresence } from "motion/react"
 import { Sparkles, ArrowRight, UserCircle, Send, Target, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { postChat, ChatResponse } from "@/lib/api"
 
-export function WelcomeLanding({ onGetStarted }: { onGetStarted: () => void }) {
+export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => void, onLogin: () => void }) {
     const [step, setStep] = React.useState<'hero' | 'chat'>('hero')
 
-    // Chatbot states
-    const [messages, setMessages] = React.useState<{ role: 'assistant' | 'user', content: string }[]>([
-        { role: 'assistant', content: "Hi! Let's design how your wealth should work for you. To start, what is your primary investment goal?" }
-    ])
+    const [messages, setMessages] = React.useState<{ role: 'assistant' | 'user', content: string }[]>([])
     const [inputValue, setInputValue] = React.useState("")
-    const [chatStage, setChatStage] = React.useState(0)
+    const [conversationId, setConversationId] = React.useState<string | undefined>(undefined)
     const [isTyping, setIsTyping] = React.useState(false)
+    const [isComplete, setIsComplete] = React.useState(false)
 
     // Meter states
     const [meterScore, setMeterScore] = React.useState(50) // 0-100
@@ -32,65 +31,55 @@ export function WelcomeLanding({ onGetStarted }: { onGetStarted: () => void }) {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }, [messages, isTyping])
 
-    const handleSendMessage = async (e?: React.FormEvent) => {
+    const handleSendMessage = async (e?: React.FormEvent, manualText?: string, silent: boolean = false) => {
         e?.preventDefault()
-        if (!inputValue.trim() || isTyping) return
+        const textToSend = manualText || inputValue.trim()
+        if (!textToSend || isTyping || isComplete) return
 
-        const userText = inputValue.trim()
-        setInputValue("")
-        setMessages(prev => [...prev, { role: 'user', content: userText }])
+        if (!silent) {
+            setInputValue("")
+            setMessages(prev => [...prev, { role: 'user', content: textToSend }])
+        }
         setIsTyping(true)
 
-        // Mock Chatbot Logic
-        setTimeout(() => {
-            setIsTyping(false)
-            if (chatStage === 0) {
-                setMessages(prev => [...prev, { role: 'assistant', content: "Got it. And how would you describe your risk tolerance? Are you comfortable with short-term volatility for higher long-term gains?" }])
-                setMeterScore(75) // Move towards growth based on mock first answer
-                setChatStage(1)
-            } else if (chatStage === 1) {
-                setMessages(prev => [...prev, { role: 'assistant', content: "Excellent. I've configured your initial capital plan targeting a balanced growth profile with optimized tax-loss harvesting." }])
-                setMeterScore(68) // Final score
-                setChatStage(2)
+        try {
+            const response = await postChat({
+                message: textToSend,
+                conversation_id: conversationId
+            })
 
-                // Trigger completion
+            setConversationId(response.conversation_id)
+            setMessages(prev => [...prev, { role: 'assistant', content: response.agent_message }])
+
+            // Update meter if risk score is in payload
+            if (response.response_type === 'risk_score_complete' && response.payload?.risk_score_result?.final_risk_score) {
+                setMeterScore(response.payload.risk_score_result.final_risk_score)
+            }
+
+            // If analysis is complete or flow ends
+            if (response.response_type === 'analysis_result') {
+                setIsComplete(true)
                 setTimeout(() => {
                     onGetStarted()
-                }, 2000)
+                }, 3000)
             }
-        }, 1500)
+        } catch (error) {
+            console.error("Chat error:", error)
+            setMessages(prev => [...prev, { role: 'assistant', content: "I'm sorry, I'm having trouble connecting right now. Please try again." }])
+        } finally {
+            setIsTyping(false)
+        }
     }
 
-    // Pre-fab answers for quicker testing
+    // Auto-initialize chatbot on first open
+    React.useEffect(() => {
+        if (step === 'chat' && messages.length === 0 && !isTyping) {
+            handleSendMessage(undefined, "hi", true)
+        }
+    }, [step])
+
     const handleQuickReply = (text: string) => {
-        setInputValue(text)
-        // small timeout to allow state to settle is slightly better but direct call is ok if we pass the string
-        setTimeout(() => {
-            const formEvent = { preventDefault: () => { } } as React.FormEvent
-            setInputValue(text) // ensure it's set before dispatch
-
-            // We can just bypass standard form submission and handle directly
-            if (isTyping) return;
-            setInputValue("")
-            setMessages(prev => [...prev, { role: 'user', content: text }])
-            setIsTyping(true)
-
-            setTimeout(() => {
-                setIsTyping(false)
-                if (chatStage === 0) {
-                    setMessages(prev => [...prev, { role: 'assistant', content: "Got it. And how would you describe your risk tolerance? Are you comfortable with short-term volatility for higher long-term gains?" }])
-                    setMeterScore(text.includes('Growth') ? 85 : 50)
-                    setChatStage(1)
-                } else if (chatStage === 1) {
-                    setMessages(prev => [...prev, { role: 'assistant', content: "Excellent. I've configured your initial capital plan with optimized tax-loss harvesting." }])
-                    setMeterScore(text.includes('aggressive') ? 78 : 68)
-                    setChatStage(2)
-                    setTimeout(() => {
-                        onGetStarted()
-                    }, 2500)
-                }
-            }, 1500)
-        }, 50)
+        handleSendMessage(undefined, text)
     }
 
     return (
@@ -98,7 +87,12 @@ export function WelcomeLanding({ onGetStarted }: { onGetStarted: () => void }) {
 
             {/* Top Right Login */}
             <div className="absolute top-6 right-8">
-                <a href="#" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">Log In</a>
+                <button 
+                  onClick={onLogin}
+                  className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+                >
+                  Log In
+                </button>
             </div>
 
             {/* Decorative dark theme background glow */}
@@ -281,18 +275,12 @@ export function WelcomeLanding({ onGetStarted }: { onGetStarted: () => void }) {
                                         <div ref={chatEndRef} />
                                     </div>
 
-                                    {/* Quick Replies */}
-                                    {chatStage === 0 && !isTyping && messages[messages.length - 1].role === 'assistant' && (
+                                    {/* Quick Replies - Show based on messages instead of chatStage */}
+                                    {!isTyping && messages.length === 1 && (
                                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-6 pb-2 flex flex-wrap gap-2">
                                             <Badge variant="outline" className="cursor-pointer bg-zinc-900 border-zinc-700 hover:bg-zinc-800 py-1.5" onClick={() => handleQuickReply("Long-term Growth")}>Long-term Growth</Badge>
                                             <Badge variant="outline" className="cursor-pointer bg-zinc-900 border-zinc-700 hover:bg-zinc-800 py-1.5" onClick={() => handleQuickReply("Steady Income")}>Steady Income</Badge>
                                             <Badge variant="outline" className="cursor-pointer bg-zinc-900 border-zinc-700 hover:bg-zinc-800 py-1.5" onClick={() => handleQuickReply("Capital Preservation")}>Capital Preservation</Badge>
-                                        </motion.div>
-                                    )}
-                                    {chatStage === 1 && !isTyping && messages[messages.length - 1].role === 'assistant' && (
-                                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-6 pb-2 flex flex-wrap gap-2">
-                                            <Badge variant="outline" className="cursor-pointer bg-zinc-900 border-zinc-700 hover:bg-zinc-800 py-1.5" onClick={() => handleQuickReply("Yes, I prefer aggressive growth")}>Yes, aggressive growth</Badge>
-                                            <Badge variant="outline" className="cursor-pointer bg-zinc-900 border-zinc-700 hover:bg-zinc-800 py-1.5" onClick={() => handleQuickReply("No, keep it balanced")}>No, keep it balanced</Badge>
                                         </motion.div>
                                     )}
 
@@ -304,13 +292,13 @@ export function WelcomeLanding({ onGetStarted }: { onGetStarted: () => void }) {
                                                 value={inputValue}
                                                 onChange={(e) => setInputValue(e.target.value)}
                                                 placeholder="Type a message..."
-                                                disabled={isTyping || chatStage >= 2}
+                                                disabled={isTyping || isComplete}
                                                 className="w-full h-12 rounded-full border border-zinc-700 bg-zinc-950/50 pl-5 pr-12 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder:text-zinc-500 transition-all disabled:opacity-50"
                                             />
                                             <Button
                                                 type="submit"
                                                 size="icon"
-                                                disabled={!inputValue.trim() || isTyping || chatStage >= 2}
+                                                disabled={!inputValue.trim() || isTyping || isComplete}
                                                 className="absolute right-1.5 h-9 w-9 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-zinc-800 disabled:text-zinc-600 disabled:opacity-100"
                                             >
                                                 <Send className="h-4 w-4 ml-0.5" />

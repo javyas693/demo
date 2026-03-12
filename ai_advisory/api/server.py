@@ -3,7 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
+from typing import Optional
+from dotenv import load_dotenv
+import os
 
+# Load environment variables from .env
+load_dotenv()
+from ai_advisory.agent.bot import ChatSessionManager
 from ai_advisory.services.http_models import ClientProfile, ProfilePatch, OrchestrateResponse
 from ai_advisory.services.profile_store import ProfileStore
 from ai_advisory.services.orchestrator_service import propose as orchestrate_propose
@@ -32,6 +38,12 @@ from fastapi.responses import JSONResponse as jsonify
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
 
+# Single instance of ChatSessionManager
+session_manager = ChatSessionManager()
+
+# MOCK STATE FOR LOGIN
+# In a real app, this would be handled via tokens/cookies
+MOCK_LOGGED_IN = False
 # CORS must be initialized immediately to handle all incoming origins
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +82,7 @@ def patch_profile(patch: ProfilePatch):
 @app.get("/session", response_model=SessionResponse)
 def get_session():
     profile = profile_store.load()
+    global MOCK_LOGGED_IN
 
     positions = getattr(profile, "positions", None) or []
     cash = getattr(profile, "cash_to_invest", None)
@@ -81,7 +94,23 @@ def get_session():
         or (len(positions) > 0)
     )
 
-    return SessionResponse(has_profile=has_profile, profile=profile)
+    return SessionResponse(
+        has_profile=has_profile,
+        is_logged_in=MOCK_LOGGED_IN,
+        profile=profile
+    )
+
+@app.post("/login")
+def login():
+    global MOCK_LOGGED_IN
+    MOCK_LOGGED_IN = True
+    return {"status": "success", "is_logged_in": True}
+
+@app.post("/logout")
+def logout():
+    global MOCK_LOGGED_IN
+    MOCK_LOGGED_IN = False
+    return {"status": "success", "is_logged_in": False}
 
 
 
@@ -455,6 +484,29 @@ def health():
         "store_root": str(STORE_ROOT),
     }
 
+class ChatRequest(BaseModel):
+    conversation_id: Optional[str] = None
+    message: str
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    """
+    Sends a message to the AI agent and returns the response.
+    """
+    conversation_id = request.conversation_id
+    
+    if not conversation_id:
+        conversation_id = str(uuid.uuid4())
+        
+    try:
+        agent_response = await session_manager.send_message(
+            message=request.message,
+            conversation_id=conversation_id,
+            user_id="web-user"
+        )
+        
+        return agent_response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
 @app.post("/risk/score")
 def risk_score(payload: dict):

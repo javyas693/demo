@@ -10,6 +10,7 @@ import { MainAppClient } from "@/components/main-app-client"
 
 export default function Home() {
   const [hasProfile, setHasProfile] = React.useState<boolean | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = React.useState<boolean>(false);
   const [showBanner, setShowBanner] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [apiError, setApiError] = React.useState(false);
@@ -19,6 +20,7 @@ export default function Home() {
       try {
         const res = await session();
         setHasProfile(res.has_profile);
+        setIsLoggedIn(res.is_logged_in);
       } catch (error) {
         console.error("Failed to load session:", error);
         setApiError(true);
@@ -28,6 +30,15 @@ export default function Home() {
     }
     checkSession();
   }, []);
+
+  const handleLogin = async () => {
+    try {
+      await import("@/lib/api").then(api => api.login());
+      setIsLoggedIn(true);
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -51,16 +62,21 @@ export default function Home() {
     );
   }
 
-  if (hasProfile === false) {
-    return <WelcomeLanding onGetStarted={async () => {
-      try {
-        await patchProfile({ cash_to_invest: 1000000, risk_score: 65, positions: [] });
-      } catch (e) {
-        console.error("Failed to persist initial profile", e);
-      }
-      setHasProfile(true);
-      setShowBanner(true);
-    }} />;
+  if (!isLoggedIn) {
+    return <WelcomeLanding 
+      onLogin={handleLogin}
+      onGetStarted={async () => {
+        try {
+          await patchProfile({ cash_to_invest: 1000000, risk_score: 65, positions: [] });
+          // Also perform login after "getting started" so we skip to main app
+          await handleLogin();
+        } catch (e) {
+          console.error("Failed to persist initial profile", e);
+        }
+        setHasProfile(true);
+        setShowBanner(true);
+      }} 
+    />;
   }
 
   return (
