@@ -635,13 +635,16 @@ class StrategyUnwindEngine:
                                     trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
                                     trigger_met = current_price >= trigger_px
                                     
-                                    # 1. Candidate calculation log
                                     if current_strategy_key in ("tax_neutral", "harvest"):
                                         monthly_remaining = max(0, max_shares_per_month - shares_sold_this_month)
                                         print(f"PRE_TRIGGER | tlh_inventory={state.tlh_inventory:,.0f} | gain_per_share={gain_per_share:,.2f} | shares_available={shares_required} | monthly_remaining={monthly_remaining}")
                                     
                                     if not trigger_met:
                                         reason = "trigger_not_met"
+                                        shares_required = 0  # EXPLICIT ENFORCEMENT
+                                    elif current_strategy_key == "harvest":
+                                        reason = "harvest_mode"
+                                        print(f"[SELL_BLOCKED] | reason=harvest_mode | shares_sold=0")
                                         shares_required = 0  # EXPLICIT ENFORCEMENT
                                     else:
                                         reason = "trigger_met"
@@ -660,8 +663,7 @@ class StrategyUnwindEngine:
                             trigger_percent=share_reduction_trigger_pct
                         )
                         
-                        # Force harvest mode to use tax_neutral runner logic for share liquidation
-                        execution_key = "tax_neutral" if current_strategy_key in ("tax_neutral", "harvest") else current_strategy_key
+                        execution_key = current_strategy_key
                         strat_res = runner.run(execution_key, sim_state, sim_params)
                         
                         shares_sold = strat_res.get("shares_sold", 0)
@@ -753,8 +755,15 @@ class StrategyUnwindEngine:
                         shares_to_sell = min(max_shares_by_tlh, remaining_monthly_capacity, int(state.shares))
                         
                         if shares_to_sell > 0:
-                            proceeds = shares_to_sell * current_price
-                            cost = shares_to_sell * state.cost_basis
+                            proceeds = 0.0
+                            cost = 0.0
+                            if strategy_key == "harvest":
+                                print(f"[SELL_BLOCKED] | reason=harvest_mode | shares_sold=0")
+                                shares_to_sell = 0  # Re-enforce zeroing out in Harvest
+                            else:
+                                proceeds = shares_to_sell * current_price
+                                cost = shares_to_sell * state.cost_basis
+                                
                             realized_gain = max(0.0, proceeds - cost)
                             
                             tlh_used_here = min(state.tlh_inventory, realized_gain)
@@ -767,14 +776,15 @@ class StrategyUnwindEngine:
                             state.cash += proceeds
                             state.realized_stock_gain += realized_gain
                             
-                            log_msg = (
-                                f"{date.date()} | [INDEPENDENT_SELL] | SELL\n"
-                                f"mode=tax_neutral | reason=global_inventory_trigger\n"
-                                f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}\n"
-                                f"shares_sold={shares_to_sell} | monthly_cap_remaining={max_shares_per_month - shares_sold_monthly[year_month]}\n"
-                                f"realized_gain=${realized_gain:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${state.tlh_inventory:,.0f}"
-                            )
-                            audit_log.append(log_msg)
+                            if shares_to_sell > 0:
+                                log_msg = (
+                                    f"{date.date()} | [INDEPENDENT_SELL] | SELL\n"
+                                    f"mode=tax_neutral | reason=global_inventory_trigger\n"
+                                    f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}\n"
+                                    f"shares_sold={shares_to_sell} | monthly_cap_remaining={max_shares_per_month - shares_sold_monthly[year_month]}\n"
+                                    f"realized_gain=${realized_gain:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${state.tlh_inventory:,.0f}"
+                                )
+                                audit_log.append(log_msg)
 
             # -----------------------------
             # Step 6: open a new option
