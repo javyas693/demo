@@ -231,6 +231,8 @@ export interface SimulationParams {
     strategy: string;
     core: CoreParams;
     covered_call?: CoveredCallParams;
+    strategy_mode?: string;
+    share_reduction_trigger_pct?: number;
     tlh?: TLHParams;
     tax?: TaxParams;
 }

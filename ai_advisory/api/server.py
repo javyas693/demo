@@ -230,6 +230,8 @@ class ConcentratedSimulatePayload(BaseModel):
     strategy: str
     core: CoreParams
     covered_call: Optional[CoveredCallParams] = None
+    strategy_mode: Optional[str] = "harvest"
+    share_reduction_trigger_pct: Optional[float] = None
     tlh: Optional[TLHParams] = None
     tax: Optional[TaxParams] = None
 
@@ -259,6 +261,9 @@ def adapt_request(payload: ConcentratedSimulatePayload) -> dict:
         params["max_shares_per_month"] = tlh.max_shares_per_month
         params["loss_handling_mode"] = tlh.mode
 
+    params["strategy_mode"] = payload.strategy_mode
+    params["share_reduction_trigger_pct"] = payload.share_reduction_trigger_pct
+
     tax = payload.tax
     if tax is not None:
         params["tax_mode"] = tax.tax_mode
@@ -274,8 +279,17 @@ def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
     initial_shares = params.get("initial_shares", 1000)
     cost_basis = params.get("cost_basis", 0.0)
     starting_cash = params.get("starting_cash", 0.0)
+    strategy_mode = params.get("strategy_mode", "harvest")
+    
+    trigger_pct = (
+        payload.share_reduction_trigger_pct
+        if payload.share_reduction_trigger_pct is not None
+        else 0.3
+    )
     
     # Debug print for verification
+    print(f"STRATEGY MODE: {strategy_mode}")
+    print(f"API INPUT trigger: {trigger_pct}")
     print(f"CONCENTRATED START - Strategy: {payload.strategy} | Ticker: {ticker} | Basis: {cost_basis} | Cash: {starting_cash}")
 
     profile = profile_store.load()
@@ -295,9 +309,9 @@ def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
         target_dte_days=params.get("target_dte_days", 30),
         target_delta=params.get("target_delta", 0.20),
         profit_capture_pct=params.get("profit_capture_pct", 0.50),
-        share_reduction_trigger_pct=params.get("share_reduction_trigger_pct", 0.0), # Passed via tax later potentially
+        share_reduction_trigger_pct=trigger_pct,
         cost_basis=cost_basis,
-        loss_handling_mode=params.get("loss_handling_mode", "harvest_hold"),
+        strategy_mode=strategy_mode,
         starting_cash=starting_cash,
         max_shares_per_month=params.get("max_shares_per_month", 200),
         stop_loss_multiple=params.get("stop_loss_multiple", 1.0)

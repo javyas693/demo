@@ -45,7 +45,6 @@ import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
 import logging
-
 logger = logging.getLogger(__name__)
 
 from backend.engine.strategy_runner import StrategyRunner
@@ -86,6 +85,9 @@ class OverlayState:
 
     cumulative_taxes: float
     cumulative_tlh: float
+    total_tlh_generated: float
+    total_tlh_used: float
+    tlh_inventory: float
     realized_option_pnl: float
     realized_stock_gain: float
 
@@ -262,6 +264,9 @@ class StrategyUnwindEngine:
             open_option=None,
             cumulative_taxes=0.0,
             cumulative_tlh=0.0,
+            total_tlh_generated=0.0,
+            total_tlh_used=0.0,
+            tlh_inventory=0.0,
             realized_option_pnl=0.0,
             realized_stock_gain=0.0,
             last_close_date=None,
@@ -366,7 +371,7 @@ class StrategyUnwindEngine:
         reduction_threshold_pct: Optional[float] = None,
 
         # NEW: share-reduction trigger percent (X% above basis)
-        share_reduction_trigger_pct: float = 0.0,
+        share_reduction_trigger_pct: float = 0.3,
 
         # Single-lot basis for MVP (if None, defaults to initial price)
         cost_basis: Optional[float] = None,
@@ -384,15 +389,15 @@ class StrategyUnwindEngine:
 
         total_realized_option_pnl = 0.0,
         audit_log: list[str] = [],
-        loss_handling_mode: str = "harvest_hold",
+        strategy_mode: str = "harvest",
         cash_return_mode: str = "underlying",  # v1: cash grows at underlying return
         starting_cash: float = 0.0,
         max_shares_per_month: int = 200,
         wash_sale_cooldown_days: int = 0,
     ) -> Dict[str, Any]:
         runner = StrategyRunner()
-        # map loss_handling_mode -> StrategyRunner key
-        strategy_key = "tax_neutral" if loss_handling_mode == "tax_neutral_sell" else "harvest"
+        # map strategy_mode -> StrategyRunner key
+        strategy_key = "tax_neutral" if strategy_mode == "tax_neutral" else "harvest"
         
         df = self.price_data.copy()
 
@@ -459,18 +464,27 @@ class StrategyUnwindEngine:
         ]
         
         # Monthly sale tracking
-        shares_sold_this_month = 0
-        current_month = None
+        shares_sold_monthly = {} # { (year, month): shares_sold }
         
         for date, row in df.iterrows():
             current_price = float(row["Price"])
             exit_reason = ""
             
+            # Stop simulation if no shares left
+            if state.shares <= 0:
+                break
+
+            # ==========================================================
+            # EXECUTION ORDER (DO NOT MODIFY):
+            # 1. Option processing
+            # 2. TLH update
+            # 3. Independent sell
+            # 4. Share execution
+            # ==========================================================
+
             # Reset monthly counter
-            month = (date.year, date.month)
-            if current_month != month:
-                current_month = month
-                shares_sold_this_month = 0
+            year_month = (date.year, date.month)
+            shares_sold_this_month = shares_sold_monthly.get(year_month, 0)
 
             # -----------------------------
             # Step 1: cash accrual at underlying return (Removed for MVP)
@@ -576,25 +590,35 @@ class StrategyUnwindEngine:
                         yearly_tax_ledger[year]["option_losses"] += loss_amt
                         yearly_tax_ledger[year]["net_capital_result"] = yearly_tax_ledger[year]["option_income"] - yearly_tax_ledger[year]["option_losses"]
                         yearly_tax_ledger[year]["tlh_generated"] = yearly_tax_ledger[year]["option_losses"]
+                        
+                        # GLOBAL TLH INVENTORY ACCUMULATION
+                        state.total_tlh_generated += loss_amt
+                        state.tlh_inventory += loss_amt
+
+                        # TLH INVENTORY TRACE
+                        print(f"[{date.date()}] TLH UPDATE | generated={loss_amt:,.0f} | inventory={state.tlh_inventory:,.0f}")
+                        
                         # Wash Sale Cooldown
                         if wash_sale_cooldown_days > 0:
                             state.next_call_allowed_date = pd.Timestamp(date) + pd.Timedelta(days=wash_sale_cooldown_days)
 
                         current_strategy_key = strategy_key
                         
-                        if current_strategy_key == "harvest":
-                            mode_label = "HARVEST_MODE"
-                            reason = "harvest_hold_selected"
+                        if current_strategy_key not in ("harvest", "tax_neutral"):
+                            mode_label = "UNKNOWN_MODE"
+                            reason = "unknown"
                             shares_required = 0
+                            strat_log_prefix = "UNKNOWN"
                         else:
-                            mode_label = "PREMIUM_COLLECTION"
+                            mode_label = "HARVEST_MODE" if current_strategy_key == "harvest" else "PREMIUM_COLLECTION"
+                            strat_log_prefix = "HARVEST_MODE" if current_strategy_key == "harvest" else "TAX_NEUTRAL_MODE"
                             
                             gain_per_share = current_price - state.cost_basis
-                            if gain_per_share <= 0:  # Exactly at or below basis
+                            if gain_per_share <= 0 or state.tlh_inventory <= 0:  # Gain <= 0 or no TLH
                                 shares_required = 0
-                                reason = "no_gain_available"
+                                reason = "no_gain_available" if gain_per_share <= 0 else "no_tlh_available"
                             else:
-                                shares_required = int(floor(loss_amt / gain_per_share))
+                                shares_required = int(floor(state.tlh_inventory / gain_per_share))
                                 
                                 remaining_monthly_capacity = max_shares_per_month - shares_sold_this_month
                                 
@@ -609,11 +633,19 @@ class StrategyUnwindEngine:
                                     )
                                     
                                     trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
-                                    if current_price < trigger_px:
+                                    trigger_met = current_price >= trigger_px
+                                    
+                                    # 1. Candidate calculation log
+                                    if current_strategy_key in ("tax_neutral", "harvest"):
+                                        monthly_remaining = max(0, max_shares_per_month - shares_sold_this_month)
+                                        print(f"PRE_TRIGGER | tlh_inventory={state.tlh_inventory:,.0f} | gain_per_share={gain_per_share:,.2f} | shares_available={shares_required} | monthly_remaining={monthly_remaining}")
+                                    
+                                    if not trigger_met:
                                         reason = "trigger_not_met"
+                                        shares_required = 0  # EXPLICIT ENFORCEMENT
                                     else:
                                         reason = "trigger_met"
-
+                                        
                         logger.debug(
                             f"LOSS={loss_amt:.2f} "
                             f"MODE={mode_label} "
@@ -628,7 +660,9 @@ class StrategyUnwindEngine:
                             trigger_percent=share_reduction_trigger_pct
                         )
                         
-                        strat_res = runner.run(current_strategy_key, sim_state, sim_params)
+                        # Force harvest mode to use tax_neutral runner logic for share liquidation
+                        execution_key = "tax_neutral" if current_strategy_key in ("tax_neutral", "harvest") else current_strategy_key
+                        strat_res = runner.run(execution_key, sim_state, sim_params)
                         
                         shares_sold = strat_res.get("shares_sold", 0)
                         cash_gen = strat_res.get("cash_generated", 0.0)
@@ -637,12 +671,18 @@ class StrategyUnwindEngine:
                         action_str = strat_res.get("action", "NO-SELL")
                         trigger_px = strat_res.get("trigger_price", state.cost_basis)
                         
+                        realized_gain = strat_res.get("realized_gain", 0.0)
+                        
                         state.shares -= shares_sold
-                        shares_sold_this_month += int(shares_sold)
+                        shares_sold_monthly[year_month] = shares_sold_this_month + int(shares_sold)
                         state.cash += (cash_gen - taxes_paid)
                         state.cumulative_taxes += taxes_paid
-                        state.cumulative_tlh += tlh_add
-                        state.realized_stock_gain += strat_res.get("realized_gain", 0.0)
+                        state.realized_stock_gain += realized_gain
+                        
+                        tlh_used_here = min(state.tlh_inventory, realized_gain)
+                        state.tlh_inventory -= tlh_used_here
+                        state.total_tlh_used += tlh_used_here
+                        state.cumulative_tlh = state.tlh_inventory
 
                         total_shares_sold_on_call_loss += int(shares_sold)
 
@@ -651,36 +691,90 @@ class StrategyUnwindEngine:
                             exit_reason = "CLOSE_STOP"
                             
                         base_log = (
-                            f"{date.date()} | {exit_reason} | {action_str}\n"
                             f"mode={mode_label} | reason={reason}\n"
                             f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f}"
                         )
-                        if current_strategy_key == "tax_neutral" and action_str != "NO-SELL":
+                        if strategy_key in ("tax_neutral", "harvest"):
+                            trigger_met = strat_res.get("action") == "SELL" or shares_required > 0
+                            print(f"POST_TRIGGER | trigger_met={trigger_met} | shares_after_trigger={int(shares_sold)}")
+                        else:
+                            print(f"POST_TRIGGER | trigger_met=True | shares_after_trigger={int(shares_sold)}")
+                        
+                        if current_strategy_key in ("tax_neutral", "harvest") and action_str != "NO-SELL":
                              base_log += f" | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}"
                         
-                        financials_log = f"opt_loss=${loss_amt:,.0f} | taxes=${taxes_paid:,.0f} | tlh=${tlh_add:,.0f} | tlh_total=${state.cumulative_tlh:,.0f}"
+                        financials_log = f"opt_loss=${loss_amt:,.0f} | taxes=${taxes_paid:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${state.tlh_inventory:,.0f}"
                         
                         if int(shares_sold) > 0:
-                            rem_cap = max(0, max_shares_per_month - shares_sold_this_month)
-                            shares_log = f"shares_sold={int(shares_sold)} | monthly_cap_remaining={rem_cap}"
-                            audit_log.append(f"{base_log}\n{shares_log}\n{financials_log}")
-                        else:
-                            audit_log.append(f"{base_log}\n{financials_log}")
-
-                        # If you want to “turn off TLH tracking” when disabled:
-                        if not enable_tax_loss_harvest:
-                            # roll back what we added to TLH in the handler by setting to 0 delta:
-                            # (We keep it simple: do nothing; MVP prefers to always track TLH dollars.)
-                            pass
-
-                    # Track trade metrics before clearing
-                    if state.open_option:
-                        total_trades += 1
-                        total_days_in_trade += (date - state.open_option.open_date).days
+                            rem_cap = max(0, max_shares_per_month - shares_sold_monthly[year_month])
+                            print(f"EXECUTION | shares_executed={int(shares_sold)} | reason=executed")
+                            
+                            log_msg = (
+                                f"{date.date()} | {exit_reason} | {action_str}\n"
+                                f"{base_log}\n"
+                                f"shares_sold={int(shares_sold)} | monthly_cap_remaining={rem_cap}\n"
+                                f"{financials_log}"
+                            )
+                            audit_log.append(log_msg)
+                            
+                        elif shares_required > 0 and int(shares_sold) == 0:
+                            reason = "trigger_block"
+                            if action_str == "SELL" and max(0, max_shares_per_month - shares_sold_monthly[year_month]) == 0:
+                                reason = "cap_limit"
+                            print(f"EXECUTION | shares_executed=0 | reason={reason}")
+                            log_msg = (
+                                f"{date.date()} | {exit_reason} | NO-SELL\n"
+                                f"{base_log}\n"
+                                f"shares_sold=0 | monthly_cap_remaining={max(0, max_shares_per_month - shares_sold_monthly[year_month])}\n"
+                                f"{financials_log}"
+                            )
+                            audit_log.append(log_msg)
 
                     # Clear option; allow immediate re-entry
+                    if not enable_tax_loss_harvest:
+                        # roll back what we added to TLH in the handler by setting to 0 delta:
+                        # (We keep it simple: do nothing; MVP prefers to always track TLH dollars.)
+                        pass
+
                     state.open_option = None
                     state.last_close_date = date
+
+            # -----------------------------
+            # Step 5: Independent Sell Engine (NEW)
+            # -----------------------------
+            if strategy_key in ("tax_neutral", "harvest") and state.tlh_inventory > 0:
+                gain_per_share = current_price - state.cost_basis
+                trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
+                
+                if current_price >= trigger_px and gain_per_share > 0:
+                    remaining_monthly_capacity = max_shares_per_month - shares_sold_monthly.get(year_month, 0)
+                    if remaining_monthly_capacity > 0 and state.shares > 0:
+                        max_shares_by_tlh = int(floor(state.tlh_inventory / gain_per_share))
+                        shares_to_sell = min(max_shares_by_tlh, remaining_monthly_capacity, int(state.shares))
+                        
+                        if shares_to_sell > 0:
+                            proceeds = shares_to_sell * current_price
+                            cost = shares_to_sell * state.cost_basis
+                            realized_gain = max(0.0, proceeds - cost)
+                            
+                            tlh_used_here = min(state.tlh_inventory, realized_gain)
+                            state.tlh_inventory -= tlh_used_here
+                            state.total_tlh_used += tlh_used_here
+                            state.cumulative_tlh = state.tlh_inventory
+                            
+                            state.shares -= shares_to_sell
+                            shares_sold_monthly[year_month] = shares_sold_monthly.get(year_month, 0) + shares_to_sell
+                            state.cash += proceeds
+                            state.realized_stock_gain += realized_gain
+                            
+                            log_msg = (
+                                f"{date.date()} | [INDEPENDENT_SELL] | SELL\n"
+                                f"mode=tax_neutral | reason=global_inventory_trigger\n"
+                                f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}\n"
+                                f"shares_sold={shares_to_sell} | monthly_cap_remaining={max_shares_per_month - shares_sold_monthly[year_month]}\n"
+                                f"realized_gain=${realized_gain:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${state.tlh_inventory:,.0f}"
+                            )
+                            audit_log.append(log_msg)
 
             # -----------------------------
             # Step 6: open a new option
@@ -775,10 +869,17 @@ class StrategyUnwindEngine:
 
             prev_price = current_price
 
+        # Forward fill unpopulated rows if simulation exited early
+        if state.shares <= 0:
+            df.loc[date:, "Cash"] = float(state.cash)
+            df.loc[date:, "Portfolio_Value"] = float(state.cash)
+            df.loc[date:, "Total_PnL"] = float(state.cash - initial_value)
+
         # Summary
-        final_shares = float(df["Shares"].iloc[-1])
-        final_stock_value = float(df["Stock_Value"].iloc[-1])
-        final_cash = float(df["Cash"].iloc[-1])
+        final_shares = float(state.shares)
+        final_cash = float(state.cash)
+        final_price = float(df["Price"].iloc[-1])
+        final_stock_value = final_shares * final_price
 
         starting_shares = int(self.initial_shares)
         starting_price = float(initial_price)
@@ -822,19 +923,18 @@ class StrategyUnwindEngine:
         print()
         print("==============================\n")
 
-        shares_reduced = int(total_shares_sold_on_call_loss)
+        shares_reduced = int(starting_shares - final_shares)
 
-        tlh_inventory_remaining = state.cumulative_tlh - state.realized_stock_gain
+        tlh_inventory_remaining = state.tlh_inventory
         gain_per_share = final_price - state.cost_basis
         raw_available_shares = tlh_inventory_remaining / gain_per_share if gain_per_share > 0 else 0.0
         tax_neutral_shares_available = min(float(remaining_shares), raw_available_shares)
 
         # STEP 5 - Reconcile TLH Totals
-        total_tlh_generated = sum(year_data["tlh_generated"] for year_data in yearly_tax_ledger.values())
-        if abs(total_tlh_generated - state.cumulative_tlh) > 0.01:
+        if abs((state.total_tlh_generated - state.total_tlh_used) - state.tlh_inventory) > 0.01:
             logger.warning(
-                f"TLH Reconciliation Failed: total_tlh_generated={total_tlh_generated:.2f} "
-                f"!= tax_loss_inventory={state.cumulative_tlh:.2f}"
+                f"TLH Reconciliation Failed: generated={state.total_tlh_generated:.2f} - used={state.total_tlh_used:.2f} "
+                f"!= inventory={state.tlh_inventory:.2f}"
             )
 
         # Compute averages for trade frequency
@@ -872,8 +972,8 @@ class StrategyUnwindEngine:
             "net_option_cash_flow": net_option_cash_flow,
             
             # TLH Inventory Mechanics
-            "tax_loss_inventory": float(state.cumulative_tlh),
-            "tlh_used": float(state.realized_stock_gain),
+            "tax_loss_inventory": float(state.tlh_inventory),
+            "tlh_used": float(state.total_tlh_used),
             "tlh_inventory_remaining": float(tlh_inventory_remaining),
             "gain_per_share": float(gain_per_share),
             "tax_neutral_shares_available": float(tax_neutral_shares_available),
@@ -935,8 +1035,9 @@ def run_strategy_comparison(
     position_reduction_pct_per_quarter: float = 0.0,
     reduction_threshold_pct: Optional[float] = None,
 
-    # NEW:
+    max_shares_per_month: int = 200,
     share_reduction_trigger_pct: float = 0.10,
+    strategy_mode: str = "harvest",
     cost_basis: Optional[float] = None,
     wash_sale_cooldown_days: int = 0,
 
