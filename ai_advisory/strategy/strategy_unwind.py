@@ -126,12 +126,23 @@ class StrategyUnwindEngine:
     # -----------------------------
 
     def _load_price_data(self) -> pd.DataFrame:
-        df = yf.download(
-            self.ticker,
-            start=self.start_date,
-            end=self.end_date,
-            progress=False,
-        )
+        import time
+        max_retries = 3
+        df = None
+        for attempt in range(max_retries):
+            try:
+                df = yf.download(
+                    self.ticker,
+                    start=self.start_date,
+                    end=self.end_date,
+                    progress=False,
+                )
+                if df is not None and not df.empty:
+                    break
+            except Exception as e:
+                logger.warning(f"yf.download failed on attempt {attempt+1}: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(1.5)
 
         if df is None or df.empty:
             raise ValueError(f"No data available for {self.ticker}")

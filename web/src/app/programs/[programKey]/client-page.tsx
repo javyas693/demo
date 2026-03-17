@@ -16,6 +16,14 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { useRouter } from "next/navigation"
 
+const formatCurrency = (num: number, compact = true) => {
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        notation: compact ? "compact" : "standard",
+        maximumFractionDigits: 1,
+    }).format(num);
+};
 function AnimatedNumber({ value }: { value: number | string }) {
     return (
         <span className="flex items-baseline">
@@ -79,8 +87,11 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     const [startDate, setStartDate] = React.useState(getTenYearsAgoStr());
     const [endDate, setEndDate] = React.useState(getTodayStr());
     const [lossHandlingMode, setLossHandlingMode] = React.useState("harvest_hold");
-    const [stopLossMultiple, setStopLossMultiple] = React.useState(1.0);
+    const [stopLossMultiple, setStopLossMultiple] = React.useState(3.0);
     const [lastRunSimulationRef, setLastRunSimulationRef] = React.useState<{ start: string, end: string } | null>(null);
+
+    const [strategyEnum, setStrategyEnum] = React.useState("COVERED_CALL");
+    const [taxMode, setTaxMode] = React.useState("OFF");
 
     // Isolated MP Card State
     const [mpCapital, setMpCapital] = React.useState<number | "">(500000);
@@ -292,22 +303,30 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                         }
                     ]
                 });
-
                 const res = await simulateConcentratedPosition({
-                    symbol: inputSymbol || "AAPL",
-                    initial_shares: Number(inputShares) || 0,
-                    cost_basis: Number(inputCostBasis) || 0,
-                    starting_cash: Number(inputStartingCash) || 0,
-                    coverage_pct: coveredPct,
-                    target_delta: targetDelta,
-                    target_dte_days: targetDteDays,
-                    profit_capture_pct: profitCaptureTarget / 100.0,
-                    share_reduction_trigger_pct: Number(shareReductionTriggerPct) / 100,
-                    start_date: startDate,
-                    end_date: endDate,
-                    loss_handling_mode: lossHandlingMode,
-                    stop_loss_multiple: stopLossMultiple,
-                    max_shares_per_month: Number(inputMaxSharesPerMonth) || 200
+                    strategy: "COVERED_CALL",
+                    core: {
+                        ticker: inputSymbol || "AAPL",
+                        initial_shares: Number(inputShares) || 0,
+                        cost_basis: Number(inputCostBasis) || 0,
+                        starting_cash: Number(inputStartingCash) || 0,
+                        start_date: startDate,
+                        end_date: endDate,
+                    },
+                    covered_call: {
+                        coverage_pct: coveredPct,
+                        target_delta: targetDelta,
+                        target_dte_days: targetDteDays,
+                        profit_capture_pct: profitCaptureTarget / 100.0,
+                    },
+                    tlh: {
+                        harvest_trigger_pct: stopLossMultiple,
+                        max_shares_per_month: Number(inputMaxSharesPerMonth) || 200,
+                        mode: lossHandlingMode,
+                    },
+                    tax: {
+                        tax_mode: taxMode,
+                    }
                 });
                 setSimulationData(res);
                 setLastRunSimulationRef({ start: startDate, end: endDate });
@@ -509,7 +528,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                             <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Loss Handling Mode</label>
                                             <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg w-full max-w-lg border border-zinc-200 dark:border-zinc-800">
                                                 <button onClick={() => setLossHandlingMode("harvest_hold")} className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${lossHandlingMode === "harvest_hold" ? "bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Harvest & Hold (TLH)</button>
-                                                <button onClick={() => setLossHandlingMode("tax_neutral_sell")} className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${lossHandlingMode === "tax_neutral_sell" ? "bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Tax-Neutral Sell</button>
+                                                <button onClick={() => setLossHandlingMode("tax_neutral")} className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${lossHandlingMode === "tax_neutral" ? "bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Tax-Neutral Sell</button>
                                             </div>
                                         </div>
 
@@ -528,7 +547,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-6">
                             <TabsList className="w-full justify-start rounded-none border-b border-zinc-200 dark:border-zinc-800 bg-transparent p-0 overflow-x-auto flex-nowrap scrollbar-none">
-                                <TabsTrigger value="current_state" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 dark:data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-2 whitespace-nowrap">1. Current</TabsTrigger>
+                                <TabsTrigger value="current_state" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 dark:data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-2 whitespace-nowrap">1. Strategy Input</TabsTrigger>
                                 <TabsTrigger value="historical" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 dark:data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-2 whitespace-nowrap">2. History</TabsTrigger>
                                 <TabsTrigger value="future_possibilities" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 dark:data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-2 whitespace-nowrap">3. Future</TabsTrigger>
                             </TabsList>
@@ -578,14 +597,37 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                         </div>
 
                                         {/* Results grid */}
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                            <MetricCard title="Shares Sold" value={simulationData.summary.shares_sold || 0} className="bg-white dark:bg-zinc-950/50" />
-                                            <MetricCard title="Cash" value={`$${(simulationData.summary.final_cash || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} className="bg-white dark:bg-zinc-950 text-emerald-600 dark:text-emerald-400 font-semibold" />
-                                            
-                                            {/* Net Option Result */}
-                                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
-                                                <div className="flex items-center gap-1 mb-1">
-                                                    <span className="text-xs font-medium text-zinc-500">Net Option Result</span>
+                                        <div className="grid grid-cols-5 gap-3 w-full">
+                                            {/* Card 1: Shares Sold */}
+                                            <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 h-[90px] flex flex-col justify-between">
+                                                <div className="text-[11px] text-zinc-500 uppercase tracking-wide">
+                                                    Shares Sold
+                                                </div>
+                                                <div 
+                                                    className="font-semibold text-zinc-900 dark:text-zinc-100 leading-none truncate tabular-nums text-[clamp(16px,1.8vw,22px)]"
+                                                    title={String(simulationData.summary.shares_sold || 0)}
+                                                >
+                                                    {simulationData.summary.shares_sold || 0}
+                                                </div>
+                                            </div>
+
+                                            {/* Card 2: Cash */}
+                                            <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 h-[90px] flex flex-col justify-between">
+                                                <div className="text-[11px] text-zinc-500 uppercase tracking-wide">
+                                                    Cash
+                                                </div>
+                                                <div 
+                                                    className="font-semibold text-emerald-600 dark:text-emerald-400 leading-none truncate tabular-nums text-[clamp(16px,1.8vw,22px)]"
+                                                    title={`$${(simulationData.summary.final_cash || 0).toLocaleString()}`}
+                                                >
+                                                    {formatCurrency(simulationData.summary.final_cash || 0, true)}
+                                                </div>
+                                            </div>
+
+                                            {/* Card 3: Net Option Result */}
+                                            <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 h-[90px] flex flex-col justify-between">
+                                                <div className="flex items-center gap-1 text-[11px] text-zinc-500 uppercase tracking-wide">
+                                                    Net Option Result
                                                     <TooltipProvider>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
@@ -597,17 +639,31 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                         </Tooltip>
                                                     </TooltipProvider>
                                                 </div>
-                                                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                                                    ${(simulationData.summary.net_option_result || simulationData.summary.realized_option_pnl || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                <div 
+                                                    className={`font-semibold leading-none truncate tabular-nums text-[clamp(16px,1.8vw,22px)] ${(simulationData.summary.net_option_result || simulationData.summary.realized_option_pnl || 0) < 0 ? "text-red-600 dark:text-red-500" : "text-green-600 dark:text-green-500"}`}
+                                                    title={`$${(simulationData.summary.net_option_result || simulationData.summary.realized_option_pnl || 0).toLocaleString()}`}
+                                                >
+                                                    {formatCurrency(simulationData.summary.net_option_result || simulationData.summary.realized_option_pnl || 0, true)}
                                                 </div>
                                             </div>
 
-                                            <MetricCard title="Total Return" value={`${(simulationData.summary.total_return_pct || 0).toFixed(2)}%`} className="bg-white dark:bg-zinc-950" />
-                                            
-                                            {/* Assignment Risk Indicator */}
-                                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
-                                                <div className="flex items-center gap-1 mb-1">
-                                                    <span className="text-xs font-medium text-zinc-500">Assignment Risk</span>
+                                            {/* Card 4: Total Return */}
+                                            <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 h-[90px] flex flex-col justify-between">
+                                                <div className="text-[11px] text-zinc-500 uppercase tracking-wide">
+                                                    Total Return
+                                                </div>
+                                                <div 
+                                                    className={`font-semibold leading-none truncate tabular-nums text-[clamp(16px,1.8vw,22px)] ${(simulationData.summary.total_return_pct || 0) >= 0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"}`}
+                                                    title={`${(simulationData.summary.total_return_pct || 0).toFixed(4)}%`}
+                                                >
+                                                    {(simulationData.summary.total_return_pct || 0).toFixed(2)}%
+                                                </div>
+                                            </div>
+
+                                            {/* Card 5: Assignment Risk */}
+                                            <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 h-[90px] flex flex-col justify-between">
+                                                <div className="flex items-center gap-1 text-[11px] text-zinc-500 uppercase tracking-wide">
+                                                    Assignment Risk
                                                     <TooltipProvider>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
@@ -619,15 +675,13 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                         </Tooltip>
                                                     </TooltipProvider>
                                                 </div>
-                                                <div className={`text-xl font-bold ${
-                                                    targetDelta <= 0.20 ? "text-emerald-600 dark:text-emerald-400" :
-                                                    targetDelta <= 0.30 ? "text-amber-500 dark:text-amber-400" :
-                                                    "text-rose-600 dark:text-rose-500"
-                                                }`}>
-                                                    {targetDelta <= 0.20 ? 'LOW' : targetDelta <= 0.30 ? 'MEDIUM' : 'HIGH'}
-                                                </div>
-                                                <div className="text-[10px] text-zinc-400 mt-1 font-medium">
-                                                    Expected Probability: ~{(targetDelta * 100).toFixed(0)}%
+                                                <div className="flex flex-col">
+                                                    <div className={`font-semibold text-sm truncate ${targetDelta <= 0.20 ? "text-green-600 dark:text-green-500" : targetDelta <= 0.30 ? "text-amber-500 dark:text-amber-400" : "text-red-600 dark:text-red-500"}`}>
+                                                        {targetDelta <= 0.20 ? 'LOW' : targetDelta <= 0.30 ? 'MEDIUM' : 'HIGH'}
+                                                    </div>
+                                                    <div className="text-[10px] text-zinc-400 truncate">
+                                                        ~{(targetDelta * 100).toFixed(0)}% probability
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -637,7 +691,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                             <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between">
                                                 <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">Tax Loss Inventory</h3>
                                                 <Badge className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
-                                                    {lossHandlingMode === 'harvest_hold' ? 'HARVEST_MODE' : 'TAX_NEUTRAL_SELL_MODE'}
+                                                    {lossHandlingMode === 'harvest_hold' ? 'HARVEST_MODE' : 'TAX_NEUTRAL_MODE'}
                                                 </Badge>
                                             </div>
                                             <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1179,9 +1233,10 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                             </TabsContent>
 
                             <TabsContent value="current_state" className="pt-8 space-y-6 outline-none">
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {(programKey === 'core_allocation' ? [
-                                        {
+                                {programKey !== 'concentrated_position' && (
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                        {(programKey === 'core_allocation' ? [
+                                            {
                                             label: "Alignment",
                                             value: (mpAllocations && mpAllocations.risk_score === mpRiskTarget) ? "100%" : "Needs Review",
                                             tag: (mpAllocations && mpAllocations.risk_score === mpRiskTarget) ? "Aligned" : "Pending"
@@ -1197,10 +1252,11 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                             title={card.label}
                                             value={!hasSimulated && programKey === 'concentrated_position' ? "—" : <AnimatedNumber value={card.value} />}
                                             trend={!hasSimulated && programKey === 'concentrated_position' ? undefined : (card.tag ? { value: card.tag } : undefined)}
-                                            className="bg-white/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800"
-                                        />
-                                    ))}
-                                </div>
+                                                className="bg-white/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800"
+                                            />
+                                        ))}
+                                    </div>
+                                )}
 
                                 {/* Included Signals section inline in overview for context */}
                                 {data.signals && data.signals.length > 0 && (
@@ -1223,18 +1279,26 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                 <div className={programKey === 'concentrated_position' ? "grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8" : "mt-8"}>
                                     {programKey !== 'core_allocation' && programKey !== 'anchor_income' && (
                                         <Card className="border-indigo-100 dark:border-indigo-900/30 overflow-hidden relative shadow-sm">
-                                            <CardHeader>
-                                                <CardTitle className="flex items-center gap-2 text-base">
-                                                    {programKey === 'core_allocation' ? 'Cash Deployment Strategy' : 'Program Policy Builder'}
-                                                </CardTitle>
-                                                <CardDescription>
-                                                    {programKey === 'core_allocation'
-                                                        ? 'Configure parameters to deploy available cash into target portfolios.'
-                                                        : 'Adjust program parameters to generate an executable strategy.'}
-                                                </CardDescription>
-                                            </CardHeader>
+                                            {programKey === 'concentrated_position' ? (
+                                                <CardHeader>
+                                                    <CardTitle className="flex items-center gap-2 text-base">
+                                                        {lossHandlingMode === "harvest_hold" ? "Harvest / TLH Controls" : "Tax-Neutral Controls"}
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        Configure overlay parameters for this position.
+                                                    </CardDescription>
+                                                </CardHeader>
+                                            ) : (
+                                                <CardHeader>
+                                                    <CardTitle className="flex items-center gap-2 text-base">
+                                                        Program Policy Builder
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        Adjust program parameters to generate an executable strategy.
+                                                    </CardDescription>
+                                                </CardHeader>
+                                            )}
                                             <CardContent className="space-y-6">
-                                                {/* Dynamic Slider Area */}
                                                 {programKey === 'income_generation' || programKey === 'income_generation_v0' ? (
                                                     <div className="space-y-6 pt-2">
                                                         <div className="space-y-4">
@@ -1324,8 +1388,8 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                                                 <TooltipContent side="top" className="max-w-xs text-xs">
                                                                                     <p>Close call when % of premium captured</p>
                                                                                 </TooltipContent>
-                                                                        </Tooltip>
-                                                                    </TooltipProvider>
+                                                                            </Tooltip>
+                                                                        </TooltipProvider>
                                                                     </span>
                                                                     <span className="text-xs text-zinc-500 font-normal mt-1">0% captures profit immediately; 100% holds until expiration.</span>
                                                                 </div>
@@ -1333,104 +1397,77 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                             </div>
                                                             <Slider defaultValue={[50]} value={[profitCaptureTarget]} min={0} max={100} step={5} onValueChange={(v) => setProfitCaptureTarget(v[0])} />
                                                         </div>
-                                                        {lossHandlingMode === 'harvest_hold' && (
-                                                            <div className="space-y-4">
-                                                                <div className="flex justify-between items-center text-sm font-medium">
+                                                        <div className="space-y-4">
+                                                            <div className="flex justify-between items-start text-sm font-medium">
+                                                                <div className="flex flex-col">
                                                                     <span className="flex items-center gap-1">
-                                                                        Loss Harvest Threshold
+                                                                        Loss Threshold (Stop Multiple)
                                                                         <TooltipProvider>
                                                                             <Tooltip>
                                                                                 <TooltipTrigger asChild>
                                                                                     <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
                                                                                 </TooltipTrigger>
                                                                                 <TooltipContent side="top" className="max-w-xs text-xs">
-                                                                                    <p>Determines how large a loss must become before the strategy harvests it for tax purposes.</p>
-                                                                                    <ul className="mt-2 list-none space-y-1">
-                                                                                        <li><strong className="text-zinc-200">1.0x</strong> = harvest when loss equals premium collected</li>
-                                                                                        <li><strong className="text-zinc-200">2.0x</strong> = wait for larger losses before harvesting</li>
-                                                                                    </ul>
-                                                                                    <p className="mt-2 text-zinc-400">Higher values create fewer but larger tax-loss events.</p>
+                                                                                    <p>Controls when losing options are closed. Lower = more frequent TLH generation. Higher = fewer stop-outs.</p>
                                                                                 </TooltipContent>
                                                                             </Tooltip>
                                                                         </TooltipProvider>
                                                                     </span>
-                                                                    <span>{stopLossMultiple.toFixed(1)}x</span>
                                                                 </div>
-                                                                <Slider defaultValue={[1.0]} value={[stopLossMultiple]} min={1.0} max={3.0} step={0.5} onValueChange={(v) => setStopLossMultiple(v[0])} />
+                                                                <span>{stopLossMultiple.toFixed(1)}</span>
                                                             </div>
-                                                        )}
-                                                        <div className="space-y-2">
-                                                            <div className="flex justify-between items-center text-sm font-medium">
-                                                                <div className="flex flex-col">
-                                                                    <span className="flex items-center gap-1">
-                                                                        Share Reduction Trigger
-                                                                        <TooltipProvider>
-                                                                            <Tooltip>
-                                                                                <TooltipTrigger asChild>
-                                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
-                                                                                </TooltipTrigger>
-                                                                                <TooltipContent side="top" className="max-w-xs text-xs">
-                                                                                    <p>Sell shares if price exceeds basis by %</p>
-                                                                                </TooltipContent>
-                                                                        </Tooltip>
-                                                                    </TooltipProvider>
-                                                                    </span>
-                                                                    {triggerError && (
-                                                                        <span className="text-xs text-red-500 font-normal mt-1">Must be &ge; 1% (or blank)</span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div className="relative w-full sm:w-1/4">
-                                                                <input
-                                                                    type="text"
-                                                                    value={shareReductionTriggerPct}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
-                                                                        if (val === "" || /^\d*\.?\d*$/.test(val)) {
-                                                                            setShareReductionTriggerPct(val);
-                                                                            if (triggerError) setTriggerError(false);
-                                                                        }
-                                                                    }}
-                                                                    onBlur={(e) => {
-                                                                        const val = e.target.value;
-                                                                        if (val !== "" && Number(val) < 1) {
-                                                                            setTriggerError(true);
-                                                                        }
-                                                                    }}
-                                                                    disabled={lossHandlingMode === 'harvest_hold'}
-                                                                    placeholder="0"
-                                                                    className={`flex h-10 w-full rounded-md border text-sm px-3 py-2 pr-8 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${triggerError ? 'border-red-500 focus-visible:ring-red-500' : 'border-zinc-200 dark:border-zinc-800 focus-visible:ring-indigo-500'}`}
-                                                                />
-                                                                <div className="absolute right-3 top-2.5 text-zinc-500 text-sm pointer-events-none">%</div>
-                                                            </div>
+                                                            <Slider defaultValue={[3.0]} value={[stopLossMultiple]} min={1.0} max={5.0} step={0.5} onValueChange={(v) => setStopLossMultiple(v[0])} />
                                                         </div>
-                                                        <div className="space-y-2">
+                                                        <div className="space-y-4 opacity-50 relative pointer-events-none">
                                                             <div className="flex justify-between items-center text-sm font-medium">
                                                                 <span className="flex items-center gap-1">
-                                                                    Max Shares / Month
+                                                                    Extrinsic Threshold (%)
                                                                     <TooltipProvider>
                                                                         <Tooltip>
                                                                             <TooltipTrigger asChild>
-                                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help pointer-events-auto" />
                                                                             </TooltipTrigger>
                                                                             <TooltipContent side="top" className="max-w-xs text-xs">
-                                                                                <p>Maximum shares sold during tax-neutral selling</p>
+                                                                                <p>Not configurable in core logic yet</p>
                                                                             </TooltipContent>
                                                                         </Tooltip>
                                                                     </TooltipProvider>
                                                                 </span>
+                                                                <span>0.5%</span>
                                                             </div>
-                                                            <div className="relative w-full sm:w-1/4">
-                                                                <input
-                                                                    type="number"
-                                                                    value={inputMaxSharesPerMonth}
-                                                                    onChange={(e) => setInputMaxSharesPerMonth(e.target.value === "" ? "" : Number(e.target.value))}
-                                                                    placeholder="200"
-                                                                    disabled={lossHandlingMode === 'harvest_hold'}
-                                                                    className="flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 border-zinc-200 dark:border-zinc-800 focus-visible:ring-indigo-500"
-                                                                />
-                                                            </div>
+                                                            <Slider defaultValue={[0.5]} value={[0.5]} max={3} step={0.1} />
                                                         </div>
+
+                                                        {lossHandlingMode === "tax_neutral" && (
+                                                            <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                                                                <div className="space-y-2">
+                                                                    <div className="flex justify-between items-center text-sm font-medium">
+                                                                        <span className="flex items-center gap-1">
+                                                                            Max Shares / Month
+                                                                            <TooltipProvider>
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                        <p>Maximum shares sold during tax-neutral reduction.</p>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            </TooltipProvider>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="relative w-full sm:w-1/4">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={inputMaxSharesPerMonth}
+                                                                            onChange={(e) => setInputMaxSharesPerMonth(e.target.value === "" ? "" : Number(e.target.value))}
+                                                                            placeholder="200"
+                                                                            className="flex h-10 w-full rounded-md border text-sm px-3 py-2 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 border-zinc-200 dark:border-zinc-800 focus-visible:ring-indigo-500"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ) : programKey === 'core_allocation' ? (
                                                     <div className="space-y-4 pt-2">
@@ -1464,11 +1501,13 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                     </div>
                                                 )}
 
-                                                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                                                    <Button onClick={handleGeneratePlan} disabled={isGenerating} size="lg" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
-                                                        {isGenerating ? "Generating Plan..." : programKey === 'core_allocation' ? "Deploy Available Cash" : "Generate Action Plan"}
-                                                    </Button>
-                                                </div>
+                                                {programKey !== 'concentrated_position' && (
+                                                    <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 mt-4">
+                                                        <Button onClick={handleGeneratePlan} disabled={isGenerating} size="lg" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                                                            {isGenerating ? "Generating Plan..." : programKey === 'core_allocation' ? "Deploy Available Cash" : "Generate Action Plan"}
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </CardContent>
                                         </Card>
                                     )}
@@ -1765,6 +1804,13 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                         </Card>
                                     )}
                                 </div>
+                                {programKey === 'concentrated_position' && (
+                                    <div className="mt-8 mb-16 px-4">
+                                        <Button onClick={handleRunSimulation} disabled={isSimulating || !inputShares || Number(inputShares) <= 0 || startDate > endDate} size="lg" className="w-full md:w-auto md:min-w-64 bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none">
+                                            {isSimulating ? "Simulating Strategy..." : "Run Simulation"}
+                                        </Button>
+                                    </div>
+                                )}
                             </TabsContent>
 
                             <TabsContent value="future_possibilities" className="pt-8 space-y-6 outline-none min-h-[400px]">
