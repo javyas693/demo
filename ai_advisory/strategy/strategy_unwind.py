@@ -91,6 +91,7 @@ class OverlayState:
 
     last_close_date: Optional[pd.Timestamp]
     open_next_day: bool
+    next_call_allowed_date: Optional[pd.Timestamp] = None
 
 
 # -----------------------------
@@ -254,6 +255,7 @@ class StrategyUnwindEngine:
             realized_stock_gain=0.0,
             last_close_date=None,
             open_next_day=True,
+            next_call_allowed_date=None,
         )
 
     @staticmethod
@@ -375,6 +377,7 @@ class StrategyUnwindEngine:
         cash_return_mode: str = "underlying",  # v1: cash grows at underlying return
         starting_cash: float = 0.0,
         max_shares_per_month: int = 200,
+        wash_sale_cooldown_days: int = 0,
     ) -> Dict[str, Any]:
         runner = StrategyRunner()
         # map loss_handling_mode -> StrategyRunner key
@@ -424,6 +427,19 @@ class StrategyUnwindEngine:
         total_realized_option_loss = 0.0
         total_shares_sold_on_call_loss = 0
         total_realized_option_pnl = 0.0
+        
+        # Trade Frequency Metrics
+        total_trades = 0
+        total_days_in_trade = 0
+        
+        # Phase 1: Separate Option Income vs Loss
+        option_premium_collected = 0.0
+        option_buyback_cost = 0.0
+        option_income = 0.0
+        option_losses = 0.0
+        
+        # Phase 2: Yearly Tax Ledger
+        yearly_tax_ledger = {}
         
         # Audit log initialization
         audit_log = [
@@ -514,31 +530,56 @@ class StrategyUnwindEngine:
 
                     # Realized option PnL for THIS trade (signed)
                     realized_option_pnl = state.open_option.premium_open_total - close_cost_total
+                    option_premium_collected += state.open_option.premium_open_total
+                    option_buyback_cost += close_cost_total
 
                     # Reporting totals
                     total_realized_option_pnl += realized_option_pnl
                     state.realized_option_pnl += realized_option_pnl
+                    
+                    # Phase 2: Yearly Tax Ledger update
+                    year = date.year
+                    if year not in yearly_tax_ledger:
+                        yearly_tax_ledger[year] = {
+                            "option_income": 0.0,
+                            "option_losses": 0.0,
+                            "net_capital_result": 0.0,
+                            "tlh_generated": 0.0
+                        }
 
-                    if realized_option_pnl > 0:  # MVP: ignore option-profit taxes
-                        pass
-
+                    if realized_option_pnl >= 0:  # MVP: ignore option-profit taxes
+                        option_income += realized_option_pnl
+                        yearly_tax_ledger[year]["option_income"] += realized_option_pnl
+                        yearly_tax_ledger[year]["net_capital_result"] = yearly_tax_ledger[year]["option_income"] - yearly_tax_ledger[year]["option_losses"]
+                        yearly_tax_ledger[year]["tlh_generated"] = yearly_tax_ledger[year]["option_losses"]
+                        
+                        audit_log.append(
+                            f"{date.date()} | {exit_reason} | NO-LOSS\n"
+                            f"opt_profit=${realized_option_pnl:,.0f}"
+                        )
                     if realized_option_pnl < 0:
                         loss_amt = abs(realized_option_pnl)
+                        option_losses += loss_amt
                         total_realized_option_loss += loss_amt
+                        
+                        yearly_tax_ledger[year]["option_losses"] += loss_amt
+                        yearly_tax_ledger[year]["net_capital_result"] = yearly_tax_ledger[year]["option_income"] - yearly_tax_ledger[year]["option_losses"]
+                        yearly_tax_ledger[year]["tlh_generated"] = yearly_tax_ledger[year]["option_losses"]
+                        # Wash Sale Cooldown
+                        if wash_sale_cooldown_days > 0:
+                            state.next_call_allowed_date = pd.Timestamp(date) + pd.Timedelta(days=wash_sale_cooldown_days)
 
-                        # Isolated Repair: Dynamic Mode Switching
-                        # Harvest only if Price < Basis. Otherwise Premium Collection (Tax Neutral)
-                        if current_price < state.cost_basis:
-                            current_strategy_key = "harvest"
+                        current_strategy_key = strategy_key
+                        
+                        if current_strategy_key == "harvest":
                             mode_label = "HARVEST_MODE"
-                            reason = "harvest_mode"
+                            reason = "harvest_hold_selected"
                             shares_required = 0
                         else:
-                            current_strategy_key = "tax_neutral"
                             mode_label = "PREMIUM_COLLECTION"
                             
                             gain_per_share = current_price - state.cost_basis
-                            if gain_per_share <= 0:  # Exactly at basis
+                            if gain_per_share <= 0:  # Exactly at or below basis
                                 shares_required = 0
                                 reason = "no_gain_available"
                             else:
@@ -621,34 +662,54 @@ class StrategyUnwindEngine:
                             # (We keep it simple: do nothing; MVP prefers to always track TLH dollars.)
                             pass
 
-                    # Clear option; re-enter next day only
+                    # Track trade metrics before clearing
+                    if state.open_option:
+                        total_trades += 1
+                        total_days_in_trade += (date - state.open_option.open_date).days
+
+                    # Clear option; allow immediate re-entry
                     state.open_option = None
-                    state.open_next_day = True
                     state.last_close_date = date
 
             # -----------------------------
-            # Step 6: open a new option (next day only, v1)
+            # Step 6: open a new option
             # -----------------------------
             can_open_today = (state.open_option is None) and (state.shares > 0)
-
+            
             if can_open_today:
-                # v1: do not re-enter same day as a close
-                eligible = state.open_next_day and (state.last_close_date is None or date > state.last_close_date)
+                # v2: continuous overlay allowed; only blocked by wash-sale cooldown
+                eligible = True
+                
+                if eligible and state.next_call_allowed_date is not None:
+                    if date < state.next_call_allowed_date:
+                        eligible = False
 
                 if eligible:
                     covered_shares = int(state.shares * (coverage_pct / 100.0))
                     covered_shares = max(0, min(covered_shares, int(state.shares)))
 
                     T_open = float(target_dte_days) / 365.0
-                    strike = self.strike_for_target_delta(
+                    
+                    raw_strike = self.strike_for_target_delta(
                         current_price, T_open, self.risk_free_rate, volatility, target_delta=float(target_delta)
                     )
+                    
+                    min_strike_price = current_price * 1.05
+                    strike_max_delta = self.strike_for_target_delta(
+                        current_price, T_open, self.risk_free_rate, volatility, target_delta=0.35
+                    )
+                    
+                    # Apply Phase 1 constraints: "Move to next strike" until delta <= 0.35 and strike >= 1.05 * price
+                    strike = max(raw_strike, min_strike_price, strike_max_delta)
 
                     premium_open_per_share = self.black_scholes_call(
                         current_price, strike, T_open, self.risk_free_rate, volatility
                     )
 
                     premium_open_total = premium_open_per_share * float(covered_shares)
+
+                    if premium_open_total <= 0:
+                        continue
 
                     # Cash inflow at open (v1)
                     state.cash += premium_open_total
@@ -660,6 +721,11 @@ class StrategyUnwindEngine:
                         covered_shares=int(covered_shares),
                         premium_open_per_share=float(premium_open_per_share),
                         premium_open_total=float(premium_open_total),
+                    )
+
+                    audit_log.append(
+                        f"{date.date()} | SELL_CALL | {covered_shares} Shares\n"
+                        f"strike=${strike:,.2f} | premium=${premium_open_total:,.0f} | delta<={0.35}"
                     )
 
                     state.open_next_day = False
@@ -747,6 +813,24 @@ class StrategyUnwindEngine:
 
         shares_reduced = int(total_shares_sold_on_call_loss)
 
+        tlh_inventory_remaining = state.cumulative_tlh - state.realized_stock_gain
+        gain_per_share = final_price - state.cost_basis
+        raw_available_shares = tlh_inventory_remaining / gain_per_share if gain_per_share > 0 else 0.0
+        tax_neutral_shares_available = min(float(remaining_shares), raw_available_shares)
+
+        # STEP 5 - Reconcile TLH Totals
+        total_tlh_generated = sum(year_data["tlh_generated"] for year_data in yearly_tax_ledger.values())
+        if abs(total_tlh_generated - state.cumulative_tlh) > 0.01:
+            logger.warning(
+                f"TLH Reconciliation Failed: total_tlh_generated={total_tlh_generated:.2f} "
+                f"!= tax_loss_inventory={state.cumulative_tlh:.2f}"
+            )
+
+        # Compute averages for trade frequency
+        total_years = (df.index[-1] - df.index[0]).days / 365.25
+        trades_per_year = total_trades / total_years if total_years > 0 else 0.0
+        avg_days_in_trade = total_days_in_trade / total_trades if total_trades > 0 else 0.0
+
         summary = {
             "strategy": "Covered Call Overlay (v1: 20Δ/30D + early exits + cash=underlying + trigger tax-neutral reduction)",
             "initial_shares": int(self.initial_shares),
@@ -757,8 +841,31 @@ class StrategyUnwindEngine:
             "shares_sold_on_call_loss": int(total_shares_sold_on_call_loss),
             "realized_option_pnl": float(total_realized_option_pnl),
             "realized_option_loss": float(total_realized_option_loss),
+            
+            # Phase 1: Separate Option Income vs Loss
+            "option_premium_collected": float(option_premium_collected),
+            "option_buyback_cost": float(option_buyback_cost),
+            "option_income": float(option_income),
+            "option_losses": float(option_losses),
+            "net_option_result": float(option_income - option_losses),
+            
+            # Phase 2: Yearly Tax Ledger
+            "yearly_tax_ledger": yearly_tax_ledger,
+            
+            # Trade Frequency Metrics
+            "total_trades": total_trades,
+            "trades_per_year": float(trades_per_year),
+            "avg_days_in_trade": float(avg_days_in_trade),
+            
             "realized_stock_gain": float(state.realized_stock_gain),
             "net_option_cash_flow": net_option_cash_flow,
+            
+            # TLH Inventory Mechanics
+            "tax_loss_inventory": float(state.cumulative_tlh),
+            "tlh_used": float(state.realized_stock_gain),
+            "tlh_inventory_remaining": float(tlh_inventory_remaining),
+            "gain_per_share": float(gain_per_share),
+            "tax_neutral_shares_available": float(tax_neutral_shares_available),
         
             # valuation
             "starting_cash": float(starting_cash),
@@ -769,7 +876,7 @@ class StrategyUnwindEngine:
             "total_return_pct": float(total_return),
         
             "cash_balance": float(ending_cash),
-            "total_pnl": float(df["Total_PnL"].iloc[-1]),
+            "total_pnl": float(final_portfolio_value - starting_portfolio_value),
         
             # config echo (locked v1)
             "target_dte_days": int(target_dte_days),
@@ -820,6 +927,7 @@ def run_strategy_comparison(
     # NEW:
     share_reduction_trigger_pct: float = 0.10,
     cost_basis: Optional[float] = None,
+    wash_sale_cooldown_days: int = 0,
 
     # LEGACY (Streamlit still passes these; accepted for backward compatibility)
     sell_shares_on_call_loss: bool = False,
@@ -848,6 +956,7 @@ def run_strategy_comparison(
         reduction_threshold_pct=reduction_threshold_pct,
         share_reduction_trigger_pct=share_reduction_trigger_pct,
         cost_basis=cost_basis,
+        wash_sale_cooldown_days=wash_sale_cooldown_days,
     )
 
     overlay_summary = overlay.get("summary", {})

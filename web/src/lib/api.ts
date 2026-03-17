@@ -214,6 +214,7 @@ export interface SimulationParams {
     start_date?: string;
     end_date?: string;
     loss_handling_mode?: string;
+    stop_loss_multiple?: number;
     max_shares_per_month?: number;
 }
 

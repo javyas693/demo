@@ -20,7 +20,9 @@ class TaxNeutralStrategy(BaseStrategy):
         cost = shares_to_sell * state.cost_basis
         
         realized_gain = max(0.0, proceeds - cost)
-        taxes = realized_gain * params.tax_rate
+        
+        taxable_gain = max(0.0, realized_gain - params.option_loss_available)
+        taxes = taxable_gain * params.tax_rate
             
         action = "SELL" if shares_to_sell > 0 else "NO-SELL"
         

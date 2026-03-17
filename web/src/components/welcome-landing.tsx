@@ -52,12 +52,14 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
             setMessages(prev => [...prev, { role: 'assistant', content: response.agent_message }])
 
             // Update meter if risk score is in payload
-            if (response.response_type === 'risk_score_complete' && response.payload?.risk_score_result?.final_risk_score) {
+            if (response.payload?.final_risk_score) {
+                setMeterScore(response.payload.final_risk_score)
+            } else if (response.payload?.risk_score_result?.final_risk_score) {
                 setMeterScore(response.payload.risk_score_result.final_risk_score)
             }
 
             // If analysis is complete or flow ends
-            if (response.response_type === 'analysis_result') {
+            if (response.response_type === 'risk_score_complete' || response.response_type === 'analysis_result') {
                 setIsComplete(true)
                 setTimeout(() => {
                     onGetStarted()

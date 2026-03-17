@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { MetricCard } from "@/components/ui/metric-card"
 import { motion, AnimatePresence } from "motion/react"
 import { simulateScenario, program as getProgram, postPlanPropose, postPlanCommit, ProgramWorkspaceResponse, TradePlan, simulateConcentratedPosition, SimulationResult, patchProfile, postFrontierPropose, FrontierProposalResponse, postMPSimulate, getMPHistory, postAnchorIncomeSimulate, getAnchorIncomeHistory } from "@/lib/api"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ScatterChart, Scatter, ReferenceLine, ZAxis, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ScatterChart, Scatter, ReferenceLine, ZAxis, BarChart, Bar, LabelList } from 'recharts';
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { useRouter } from "next/navigation"
 
@@ -79,6 +79,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     const [startDate, setStartDate] = React.useState(getTenYearsAgoStr());
     const [endDate, setEndDate] = React.useState(getTodayStr());
     const [lossHandlingMode, setLossHandlingMode] = React.useState("harvest_hold");
+    const [stopLossMultiple, setStopLossMultiple] = React.useState(1.0);
     const [lastRunSimulationRef, setLastRunSimulationRef] = React.useState<{ start: string, end: string } | null>(null);
 
     // Isolated MP Card State
@@ -305,6 +306,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                     start_date: startDate,
                     end_date: endDate,
                     loss_handling_mode: lossHandlingMode,
+                    stop_loss_multiple: stopLossMultiple,
                     max_shares_per_month: Number(inputMaxSharesPerMonth) || 200
                 });
                 setSimulationData(res);
@@ -576,12 +578,321 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                         </div>
 
                                         {/* Results grid */}
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                             <MetricCard title="Shares Sold" value={simulationData.summary.shares_sold || 0} className="bg-white dark:bg-zinc-950/50" />
                                             <MetricCard title="Cash" value={`$${(simulationData.summary.final_cash || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} className="bg-white dark:bg-zinc-950 text-emerald-600 dark:text-emerald-400 font-semibold" />
-                                            <MetricCard title="Option PnL" value={`$${(simulationData.summary.realized_option_pnl || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} className="bg-white dark:bg-zinc-950 text-indigo-600 dark:text-indigo-400" />
+                                            
+                                            {/* Net Option Result */}
+                                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
+                                                <div className="flex items-center gap-1 mb-1">
+                                                    <span className="text-xs font-medium text-zinc-500">Net Option Result</span>
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                <p>Option income minus option losses.</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                </div>
+                                                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                                                    ${(simulationData.summary.net_option_result || simulationData.summary.realized_option_pnl || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                </div>
+                                            </div>
+
                                             <MetricCard title="Total Return" value={`${(simulationData.summary.total_return_pct || 0).toFixed(2)}%`} className="bg-white dark:bg-zinc-950" />
+                                            
+                                            {/* Assignment Risk Indicator */}
+                                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
+                                                <div className="flex items-center gap-1 mb-1">
+                                                    <span className="text-xs font-medium text-zinc-500">Assignment Risk</span>
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                <p>probability option expires ITM (based on delta)</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                </div>
+                                                <div className={`text-xl font-bold ${
+                                                    targetDelta <= 0.20 ? "text-emerald-600 dark:text-emerald-400" :
+                                                    targetDelta <= 0.30 ? "text-amber-500 dark:text-amber-400" :
+                                                    "text-rose-600 dark:text-rose-500"
+                                                }`}>
+                                                    {targetDelta <= 0.20 ? 'LOW' : targetDelta <= 0.30 ? 'MEDIUM' : 'HIGH'}
+                                                </div>
+                                                <div className="text-[10px] text-zinc-400 mt-1 font-medium">
+                                                    Expected Probability: ~{(targetDelta * 100).toFixed(0)}%
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        {/* Tax Loss Inventory Panel */}
+                                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden">
+                                            <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between">
+                                                <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">Tax Loss Inventory</h3>
+                                                <Badge className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                    {lossHandlingMode === 'harvest_hold' ? 'HARVEST_MODE' : 'TAX_NEUTRAL_SELL_MODE'}
+                                                </Badge>
+                                            </div>
+                                            <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                <div className="space-y-1">
+                                                    <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                                                        TLH Available
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                    <p>Total tax losses generated and available to offset gains.</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </span>
+                                                    <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                                                        ${(simulationData.summary.tax_loss_inventory || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                                                        TLH Used
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                    <p>losses already applied to gains</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </span>
+                                                    <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                                                        ${(simulationData.summary.tlh_used || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                                                        TLH Remaining
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                    <p>unused tax loss inventory</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </span>
+                                                    <div className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                                                        ${(simulationData.summary.tlh_inventory_remaining || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Tax Utilization Panel */}
+                                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden">
+                                            <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between">
+                                                <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">Tax Utilization</h3>
+                                            </div>
+                                            <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                <div className="space-y-1">
+                                                    <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                                                        Gain Per Share
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                    <p>Current price minus cost basis</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </span>
+                                                    <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                                                        ${(simulationData.summary.gain_per_share || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                                                        Potential Tax Savings
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                    <p>TLH × assumed tax rate (not cash)</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </span>
+                                                    <div className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                                                        ${(Math.max(0, simulationData.summary.tlh_inventory_remaining || 0) * 0.37).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                                                        Tax-Neutral Shares
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                    <p>Number of shares that can be sold without generating taxable gains because accumulated tax losses offset the profit.</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </span>
+                                                    <div className="text-lg font-semibold text-indigo-600 dark:text-indigo-400">
+                                                        {Math.floor(simulationData.summary.tax_neutral_shares_available || 0).toLocaleString()} <span className="text-xs text-zinc-500 font-normal">shares</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="px-4 py-3 bg-indigo-50/50 dark:bg-indigo-900/20 border-t border-indigo-100 dark:border-indigo-900/50 text-sm text-indigo-700 dark:text-indigo-400 text-center font-medium">
+                                                You can sell up to {Math.floor(simulationData.summary.tax_neutral_shares_available || 0).toLocaleString()} shares tax-free
+                                            </div>
+                                        </div>
+
+                                        {/* Yearly Tax Ledger & Bar Chart */}
+                                        {simulationData.summary.yearly_tax_ledger && Object.keys(simulationData.summary.yearly_tax_ledger).length > 0 && (
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                                                {/* Yearly Tax Report Table */}
+                                                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden flex flex-col">
+                                                    <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+                                                        <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">Yearly Tax Report</h3>
+                                                    </div>
+                                                    <div className="flex-1 overflow-auto max-h-[350px]">
+                                                        <Table>
+                                                            <TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/20 sticky top-0 backdrop-blur-sm z-10">
+                                                                <TableRow>
+                                                                    <TableHead className="w-[80px]">Year</TableHead>
+                                                                    <TableHead className="text-right">
+                                                                        <div className="flex items-center justify-end gap-1">
+                                                                            Option Income
+                                                                            <TooltipProvider>
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                        <p>realized premium gains only</p>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            </TooltipProvider>
+                                                                        </div>
+                                                                    </TableHead>
+                                                                    <TableHead className="text-right text-rose-600 dark:text-rose-500">Option Losses</TableHead>
+                                                                    <TableHead className="text-right">Net Capital Result</TableHead>
+                                                                    <TableHead className="text-right text-indigo-600 dark:text-indigo-400">
+                                                                        <div className="flex items-center justify-end gap-1">
+                                                                            TLH Generated
+                                                                            <TooltipProvider>
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent side="top" className="max-w-xs text-xs text-left">
+                                                                                        <p>Tax Loss Harvesting (TLH). Losses realized from buying back options at a higher price than they were sold.</p>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            </TooltipProvider>
+                                                                        </div>
+                                                                    </TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {Object.entries(simulationData.summary.yearly_tax_ledger).sort(([y1], [y2]) => Number(y1) - Number(y2)).map(([year, data]: [string, any], idx) => (
+                                                                    <TableRow key={year}>
+                                                                        <TableCell className="font-medium text-xs">{year}</TableCell>
+                                                                        <TableCell className="text-xs text-right">${data.option_income.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                                                                        <TableCell className="text-xs text-right text-rose-600 dark:text-rose-400">${data.option_losses.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                                                                        <TableCell className={`text-xs text-right font-medium ${data.net_capital_result < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                                            {data.net_capital_result < 0 ? '-' : ''}${Math.abs(data.net_capital_result).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-xs text-right font-medium text-indigo-600 dark:text-indigo-400">${data.tlh_generated.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                                {/* Totals Row */}
+                                                                <TableRow className="bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 border-t-2 border-zinc-200 dark:border-zinc-800">
+                                                                    <TableCell className="font-bold text-xs">Total</TableCell>
+                                                                    <TableCell className="font-bold text-xs text-right">
+                                                                        ${Object.values(simulationData.summary.yearly_tax_ledger).reduce((acc: number, val: any) => acc + val.option_income, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                                    </TableCell>
+                                                                    <TableCell className="font-bold text-xs text-right text-rose-600 dark:text-rose-500">
+                                                                        ${Object.values(simulationData.summary.yearly_tax_ledger).reduce((acc: number, val: any) => acc + val.option_losses, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                                    </TableCell>
+                                                                    <TableCell className="font-bold text-xs text-right">
+                                                                        ${Object.values(simulationData.summary.yearly_tax_ledger).reduce((acc: number, val: any) => acc + val.net_capital_result, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                                    </TableCell>
+                                                                    <TableCell className="font-bold text-xs text-right text-indigo-600 dark:text-indigo-500">
+                                                                        ${(simulationData.summary.tax_loss_inventory || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Income vs TLH Chart */}
+                                                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden flex flex-col min-h-[350px]">
+                                                    <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+                                                        <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">Income vs TLH Generation</h3>
+                                                        <p className="text-xs text-zinc-500 mt-1">
+                                                            Strategy generated ${(simulationData.summary.option_income || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} income and ${(simulationData.summary.tax_loss_inventory || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} tax losses over the period.
+                                                        </p>
+                                                    </div>
+                                                    <div className="p-4 flex-1 w-full h-full min-h-[300px]">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <BarChart
+                                                                data={Object.entries(simulationData.summary.yearly_tax_ledger).sort(([y1], [y2]) => Number(y1) - Number(y2)).map(([year, data]: [string, any]) => ({
+                                                                    year,
+                                                                    "Income Generated": data.option_income,
+                                                                    "Tax Loss Generated": data.tlh_generated,
+                                                                    "Net": data.net_capital_result
+                                                                }))}
+                                                                margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+                                                                >
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                                                                <XAxis dataKey="year" fontSize={12} stroke="#a1a1aa" />
+                                                                <YAxis tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} fontSize={12} stroke="#a1a1aa" />
+                                                                <RechartsTooltip 
+                                                                    formatter={(value: any, name: any) => [
+                                                                        `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 
+                                                                        name === "Income Generated" ? "Income" : name === "Tax Loss Generated" ? "TLH" : name
+                                                                    ]}
+                                                                    labelFormatter={(label, payload) => {
+                                                                        if (payload && payload.length) {
+                                                                            const net = payload[0].payload.Net;
+                                                                            return `${label} (Net: $${Number(net).toLocaleString(undefined, { maximumFractionDigits: 0 })})`;
+                                                                        }
+                                                                        return label;
+                                                                    }}
+                                                                    cursor={{ fill: 'rgba(230,230,230,0.1)' }}
+                                                                />
+                                                                <Legend />
+                                                                <Bar dataKey="Income Generated" fill="#10b981" radius={[4, 4, 0, 0]}>
+                                                                    <LabelList dataKey="Income Generated" position="top" formatter={(val: any) => val > 0 ? `$${(val / 1000).toFixed(0)}k` : ''} fill="#10b981" fontSize={10} />
+                                                                </Bar>
+                                                                <Bar dataKey="Tax Loss Generated" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                                                                    <LabelList dataKey="Tax Loss Generated" position="top" formatter={(val: any) => val > 0 ? `$${(val / 1000).toFixed(0)}k` : ''} fill="#6366f1" fontSize={10} />
+                                                                </Bar>
+                                                            </BarChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Trade Log */}
                                         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden">
@@ -945,21 +1256,57 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                     <div className="space-y-6 pt-2">
                                                         <div className="space-y-4">
                                                             <div className="flex justify-between items-center text-sm font-medium">
-                                                                <span>Coverage %</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    Coverage %
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                <p>% of shares used for covered calls</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                </span>
                                                                 <span>{coveredPct}%</span>
                                                             </div>
                                                             <Slider defaultValue={[50]} value={[coveredPct]} max={100} step={10} onValueChange={(v) => setCoveredPct(v[0])} />
                                                         </div>
                                                         <div className="space-y-4">
                                                             <div className="flex justify-between items-center text-sm font-medium">
-                                                                <span>Target Delta</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    Target Delta
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                <p>Call strike aggressiveness</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                </span>
                                                                 <span>{targetDelta.toFixed(2)}</span>
                                                             </div>
                                                             <Slider defaultValue={[0.20]} value={[targetDelta]} min={0.05} max={0.50} step={0.05} onValueChange={(v) => setTargetDelta(v[0])} />
                                                         </div>
                                                         <div className="space-y-4">
                                                             <div className="flex justify-between items-center text-sm font-medium">
-                                                                <span>Option Duration (Days)</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    Option Duration (Days)
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                <p>Days to expiration</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                </span>
                                                                 <span>{targetDteDays}</span>
                                                             </div>
                                                             <Slider defaultValue={[30]} value={[targetDteDays]} min={7} max={90} step={1} onValueChange={(v) => setTargetDteDays(v[0])} />
@@ -967,17 +1314,67 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                         <div className="space-y-4">
                                                             <div className="flex justify-between items-start text-sm font-medium">
                                                                 <div className="flex flex-col">
-                                                                    <span>Profit Capture Target (%)</span>
+                                                                    <span className="flex items-center gap-1">
+                                                                        Profit Capture Target (%)
+                                                                        <TooltipProvider>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                    <p>Close call when % of premium captured</p>
+                                                                                </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                    </span>
                                                                     <span className="text-xs text-zinc-500 font-normal mt-1">0% captures profit immediately; 100% holds until expiration.</span>
                                                                 </div>
                                                                 <span>{profitCaptureTarget}%</span>
                                                             </div>
                                                             <Slider defaultValue={[50]} value={[profitCaptureTarget]} min={0} max={100} step={5} onValueChange={(v) => setProfitCaptureTarget(v[0])} />
                                                         </div>
+                                                        {lossHandlingMode === 'harvest_hold' && (
+                                                            <div className="space-y-4">
+                                                                <div className="flex justify-between items-center text-sm font-medium">
+                                                                    <span className="flex items-center gap-1">
+                                                                        Loss Harvest Threshold
+                                                                        <TooltipProvider>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                    <p>Determines how large a loss must become before the strategy harvests it for tax purposes.</p>
+                                                                                    <ul className="mt-2 list-none space-y-1">
+                                                                                        <li><strong className="text-zinc-200">1.0x</strong> = harvest when loss equals premium collected</li>
+                                                                                        <li><strong className="text-zinc-200">2.0x</strong> = wait for larger losses before harvesting</li>
+                                                                                    </ul>
+                                                                                    <p className="mt-2 text-zinc-400">Higher values create fewer but larger tax-loss events.</p>
+                                                                                </TooltipContent>
+                                                                            </Tooltip>
+                                                                        </TooltipProvider>
+                                                                    </span>
+                                                                    <span>{stopLossMultiple.toFixed(1)}x</span>
+                                                                </div>
+                                                                <Slider defaultValue={[1.0]} value={[stopLossMultiple]} min={1.0} max={3.0} step={0.5} onValueChange={(v) => setStopLossMultiple(v[0])} />
+                                                            </div>
+                                                        )}
                                                         <div className="space-y-2">
                                                             <div className="flex justify-between items-center text-sm font-medium">
                                                                 <div className="flex flex-col">
-                                                                    <span>Share Reduction Trigger</span>
+                                                                    <span className="flex items-center gap-1">
+                                                                        Share Reduction Trigger
+                                                                        <TooltipProvider>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                    <p>Sell shares if price exceeds basis by %</p>
+                                                                                </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                    </span>
                                                                     {triggerError && (
                                                                         <span className="text-xs text-red-500 font-normal mt-1">Must be &ge; 1% (or blank)</span>
                                                                     )}
@@ -1009,7 +1406,19 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                         </div>
                                                         <div className="space-y-2">
                                                             <div className="flex justify-between items-center text-sm font-medium">
-                                                                <span>Max Shares / Month</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    Max Shares / Month
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                <p>Maximum shares sold during tax-neutral selling</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                </span>
                                                             </div>
                                                             <div className="relative w-full sm:w-1/4">
                                                                 <input

@@ -217,6 +217,7 @@ class ConcentratedSimulatePayload(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     loss_handling_mode: str = "harvest_hold"
+    stop_loss_multiple: float = 1.0
     max_shares_per_month: int = 200
 
 @app.post("/programs/concentrated_position/simulate")
@@ -252,7 +253,8 @@ def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
         cost_basis=cost_basis,
         loss_handling_mode=payload.loss_handling_mode,
         starting_cash=starting_cash,
-        max_shares_per_month=payload.max_shares_per_month
+        max_shares_per_month=payload.max_shares_per_month,
+        stop_loss_multiple=payload.stop_loss_multiple
     )
 
     print("DEBUG RESULT KEYS:", result.keys())
@@ -508,6 +510,8 @@ def health():
 class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     message: str
+import traceback # Make sure this is at the very top of your server.py file!
+
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """
@@ -519,6 +523,7 @@ async def chat_endpoint(request: ChatRequest):
         conversation_id = str(uuid.uuid4())
         
     try:
+        # This is where the magic (and currently the crash) happens
         agent_response = await session_manager.send_message(
             message=request.message,
             conversation_id=conversation_id,
@@ -527,6 +532,11 @@ async def chat_endpoint(request: ChatRequest):
         
         return agent_response
     except Exception as e:
+        # THIS IS THE KEY: It prints the 'Internal' error to your terminal
+        print("❌ AGENT CRASH DETECTED:")
+        traceback.print_exc() 
+        
+        # This still sends the 500 to the browser
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
 @app.post("/risk/score")
