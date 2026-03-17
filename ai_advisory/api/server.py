@@ -204,38 +204,84 @@ def get_cp_history():
             return None
     return None
 
-class ConcentratedSimulatePayload(BaseModel):
-    symbol: str
+class CoreParams(BaseModel):
     initial_shares: int
     cost_basis: float
     starting_cash: float
+    ticker: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class CoveredCallParams(BaseModel):
     coverage_pct: float = 50.0
     target_delta: float = 0.20
     target_dte_days: int = 30
     profit_capture_pct: float = 0.50
-    share_reduction_trigger_pct: float = 0.0
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    loss_handling_mode: str = "harvest_hold"
-    stop_loss_multiple: float = 1.0
+
+class TLHParams(BaseModel):
+    harvest_trigger_pct: float = 1.0
     max_shares_per_month: int = 200
+    mode: str = "harvest_hold"
+
+class TaxParams(BaseModel):
+    tax_mode: str = "OFF"
+
+class ConcentratedSimulatePayload(BaseModel):
+    strategy: str
+    core: CoreParams
+    covered_call: Optional[CoveredCallParams] = None
+    tlh: Optional[TLHParams] = None
+    tax: Optional[TaxParams] = None
+
+def adapt_request(payload: ConcentratedSimulatePayload) -> dict:
+    strategy = payload.strategy
+    core = payload.core
+
+    params = {
+        "initial_shares": core.initial_shares,
+        "cost_basis": core.cost_basis,
+        "starting_cash": core.starting_cash,
+        "ticker": core.ticker,
+        "start_date": core.start_date,
+        "end_date": core.end_date,
+    }
+
+    cc = payload.covered_call
+    if cc is not None:
+        params["coverage_pct"] = cc.coverage_pct
+        params["target_delta"] = cc.target_delta
+        params["target_dte_days"] = cc.target_dte_days
+        params["profit_capture_pct"] = cc.profit_capture_pct
+
+    tlh = payload.tlh
+    if tlh is not None:
+        params["stop_loss_multiple"] = tlh.harvest_trigger_pct
+        params["max_shares_per_month"] = tlh.max_shares_per_month
+        params["loss_handling_mode"] = tlh.mode
+
+    tax = payload.tax
+    if tax is not None:
+        params["tax_mode"] = tax.tax_mode
+
+    return params
+
 
 @app.post("/programs/concentrated_position/simulate")
 def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
-    # Isolated Repair: Map exactly from payload
-    ticker = payload.symbol
-    initial_shares = payload.initial_shares
-    cost_basis = payload.cost_basis
-    starting_cash = payload.starting_cash
+    params = adapt_request(payload)
+    
+    ticker = params["ticker"]
+    initial_shares = params.get("initial_shares", 1000)
+    cost_basis = params.get("cost_basis", 0.0)
+    starting_cash = params.get("starting_cash", 0.0)
     
     # Debug print for verification
-    print(f"CONCENTRATED START - Ticker: {ticker} | Basis: {cost_basis} | Cash: {starting_cash}")
+    print(f"CONCENTRATED START - Strategy: {payload.strategy} | Ticker: {ticker} | Basis: {cost_basis} | Cash: {starting_cash}")
 
     profile = profile_store.load()
-    # Use the ticker from payload, ignore profile symbol for simulation specifically
 
-    end_date_str = payload.end_date if payload.end_date else datetime.now().strftime("%Y-%m-%d")
-    start_date_str = payload.start_date if payload.start_date else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    end_date_str = params.get("end_date") if params.get("end_date") else datetime.now().strftime("%Y-%m-%d")
+    start_date_str = params.get("start_date") if params.get("start_date") else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
     engine = StrategyUnwindEngine(
         ticker=ticker,
@@ -245,17 +291,18 @@ def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
     )
 
     result = engine.run_covered_call_overlay(
-        coverage_pct=payload.coverage_pct,
-        target_dte_days=payload.target_dte_days,
-        target_delta=payload.target_delta,
-        profit_capture_pct=payload.profit_capture_pct,
-        share_reduction_trigger_pct=payload.share_reduction_trigger_pct,
+        coverage_pct=params.get("coverage_pct", 50.0),
+        target_dte_days=params.get("target_dte_days", 30),
+        target_delta=params.get("target_delta", 0.20),
+        profit_capture_pct=params.get("profit_capture_pct", 0.50),
+        share_reduction_trigger_pct=params.get("share_reduction_trigger_pct", 0.0), # Passed via tax later potentially
         cost_basis=cost_basis,
-        loss_handling_mode=payload.loss_handling_mode,
+        loss_handling_mode=params.get("loss_handling_mode", "harvest_hold"),
         starting_cash=starting_cash,
-        max_shares_per_month=payload.max_shares_per_month,
-        stop_loss_multiple=payload.stop_loss_multiple
+        max_shares_per_month=params.get("max_shares_per_month", 200),
+        stop_loss_multiple=params.get("stop_loss_multiple", 1.0)
     )
+
 
     print("DEBUG RESULT KEYS:", result.keys())
     print("DEBUG SUMMARY:", result.get("summary"))
@@ -721,8 +768,8 @@ def commit_plan(plan_id: str, mode: str = "paper"):
             
         elif action.type == "ALLOCATE_CASH":
             from ai_advisory.services.http_models import PositionIn
-            amount = action.amount or 0
-            if amount > 0:
+            amount: float = float(action.amount or 0.0)
+            if amount > 0.0:
                 profile.cash_to_invest -= amount
                 # Mock ETF basket deployment 
                 basket = {"VTI": 0.60, "VXUS": 0.30, "BND": 0.10}

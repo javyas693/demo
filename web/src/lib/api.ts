@@ -201,21 +201,38 @@ export async function fetchEvents(): Promise<{ events: EventLog[] }> {
     return apiGet<{ events: EventLog[] }>("/api/v1/events");
 }
 
-export interface SimulationParams {
-    symbol: string;
+export interface CoreParams {
     initial_shares: number;
     cost_basis: number;
     starting_cash: number;
+    ticker: string;
+    start_date?: string;
+    end_date?: string;
+}
+
+export interface CoveredCallParams {
     coverage_pct: number;
     target_delta: number;
     target_dte_days: number;
-    profit_capture_pct?: number;
-    share_reduction_trigger_pct: number;
-    start_date?: string;
-    end_date?: string;
-    loss_handling_mode?: string;
-    stop_loss_multiple?: number;
-    max_shares_per_month?: number;
+    profit_capture_pct: number;
+}
+
+export interface TLHParams {
+    harvest_trigger_pct: number;
+    max_shares_per_month: number;
+    mode: string;
+}
+
+export interface TaxParams {
+    tax_mode: string;
+}
+
+export interface SimulationParams {
+    strategy: string;
+    core: CoreParams;
+    covered_call?: CoveredCallParams;
+    tlh?: TLHParams;
+    tax?: TaxParams;
 }
 
 export interface SimulationResult {
