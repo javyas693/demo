@@ -54,7 +54,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     const [intensity, setIntensity] = React.useState(50); // 0 to 100 for legacy
     const [targetDelta, setTargetDelta] = React.useState(0.20);
     const [targetDteDays, setTargetDteDays] = React.useState(30);
-    const [shareReductionTriggerPct, setShareReductionTriggerPct] = React.useState("5");
+    const [shareReductionTriggerPct, setShareReductionTriggerPct] = React.useState("30");
     const [triggerError, setTriggerError] = React.useState(false);
 
     const [activeTab, setActiveTab] = React.useState("current_state"); // Force dynamic tab routing
@@ -86,7 +86,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     };
     const [startDate, setStartDate] = React.useState(getTenYearsAgoStr());
     const [endDate, setEndDate] = React.useState(getTodayStr());
-    const [lossHandlingMode, setLossHandlingMode] = React.useState("harvest_hold");
+    const [strategyMode, setStrategyMode] = React.useState<"harvest" | "tax_neutral">("harvest");
     const [stopLossMultiple, setStopLossMultiple] = React.useState(3.0);
     const [lastRunSimulationRef, setLastRunSimulationRef] = React.useState<{ start: string, end: string } | null>(null);
 
@@ -284,7 +284,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     };
 
     const handleRunSimulation = async () => {
-        if (programKey === 'concentrated_position' && shareReductionTriggerPct !== "" && Number(shareReductionTriggerPct) < 1) {
+        if (programKey === 'concentrated_position' && shareReductionTriggerPct !== "" && Number(shareReductionTriggerPct) < 0) {
             setTriggerError(true);
             return;
         }
@@ -319,10 +319,12 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                         target_dte_days: targetDteDays,
                         profit_capture_pct: profitCaptureTarget / 100.0,
                     },
+                    strategy_mode: strategyMode,
+                    share_reduction_trigger_pct: Number(shareReductionTriggerPct) / 100.0,
                     tlh: {
                         harvest_trigger_pct: stopLossMultiple,
                         max_shares_per_month: Number(inputMaxSharesPerMonth) || 200,
-                        mode: lossHandlingMode,
+                        mode: strategyMode,
                     },
                     tax: {
                         tax_mode: taxMode,
@@ -525,10 +527,10 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Loss Handling Mode</label>
+                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Strategy Mode</label>
                                             <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg w-full max-w-lg border border-zinc-200 dark:border-zinc-800">
-                                                <button onClick={() => setLossHandlingMode("harvest_hold")} className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${lossHandlingMode === "harvest_hold" ? "bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Harvest & Hold (TLH)</button>
-                                                <button onClick={() => setLossHandlingMode("tax_neutral")} className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${lossHandlingMode === "tax_neutral" ? "bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Tax-Neutral Sell</button>
+                                                <button onClick={() => { setStrategyMode("harvest"); console.log("Strategy Mode:", "harvest"); }} className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${strategyMode === "harvest" ? "bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Harvest & Hold (TLH)</button>
+                                                <button onClick={() => { setStrategyMode("tax_neutral"); console.log("Strategy Mode:", "tax_neutral"); }} className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${strategyMode === "tax_neutral" ? "bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>Tax-Neutral Sell</button>
                                             </div>
                                         </div>
 
@@ -691,7 +693,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                             <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between">
                                                 <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">Tax Loss Inventory</h3>
                                                 <Badge className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
-                                                    {lossHandlingMode === 'harvest_hold' ? 'HARVEST_MODE' : 'TAX_NEUTRAL_MODE'}
+                                                    {strategyMode === 'harvest' ? 'HARVEST_MODE' : 'TAX_NEUTRAL_MODE'}
                                                 </Badge>
                                             </div>
                                             <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1282,7 +1284,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                             {programKey === 'concentrated_position' ? (
                                                 <CardHeader>
                                                     <CardTitle className="flex items-center gap-2 text-base">
-                                                        {lossHandlingMode === "harvest_hold" ? "Harvest / TLH Controls" : "Tax-Neutral Controls"}
+                                                        {strategyMode === "harvest" ? "Harvest / TLH Controls" : "Tax-Neutral Controls"}
                                                     </CardTitle>
                                                     <CardDescription>
                                                         Configure overlay parameters for this position.
@@ -1438,8 +1440,36 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                             <Slider defaultValue={[0.5]} value={[0.5]} max={3} step={0.1} />
                                                         </div>
 
-                                                        {lossHandlingMode === "tax_neutral" && (
+                                                        {strategyMode === 'tax_neutral' && (
                                                             <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                                                                <div className="space-y-2">
+                                                                    <div className="flex justify-between items-center text-sm font-medium">
+                                                                        <span className="flex items-center gap-1">
+                                                                            Sell Trigger (% above cost basis)
+                                                                            <TooltipProvider>
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <HelpCircle className="h-3 w-3 text-zinc-400 cursor-help" />
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent side="top" className="max-w-xs text-xs">
+                                                                                        <p>Threshold price increase to trigger share selling.</p>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            </TooltipProvider>
+                                                                        </span>
+                                                                        <span className="text-zinc-500 font-mono">{shareReductionTriggerPct}%</span>
+                                                                    </div>
+                                                                    <div className="pt-2 pb-1">
+                                                                        <Slider
+                                                                            value={[Number(shareReductionTriggerPct)]}
+                                                                            onValueChange={(vals) => setShareReductionTriggerPct(vals[0].toString())}
+                                                                            max={100}
+                                                                            min={0}
+                                                                            step={1}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
                                                                 <div className="space-y-2">
                                                                     <div className="flex justify-between items-center text-sm font-medium">
                                                                         <span className="flex items-center gap-1">
