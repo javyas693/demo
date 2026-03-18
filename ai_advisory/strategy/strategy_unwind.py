@@ -667,6 +667,15 @@ class StrategyUnwindEngine:
                         strat_res = runner.run(execution_key, sim_state, sim_params)
                         
                         shares_sold = strat_res.get("shares_sold", 0)
+                        
+                        # --- STRATEGY CONTRACT GUARDS ---
+                        if shares_sold > 0:
+                            if current_strategy_key == "harvest":
+                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: harvest mode attempted to sell shares.")
+                            if not trigger_met:
+                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: tax-neutral mode attempted to sell shares without trigger_met being True.")
+                        # --------------------------------
+                        
                         cash_gen = strat_res.get("cash_generated", 0.0)
                         taxes_paid = strat_res.get("taxes", 0.0)
                         tlh_add = strat_res.get("tlh_delta", 0.0)
@@ -676,6 +685,9 @@ class StrategyUnwindEngine:
                         realized_gain = strat_res.get("realized_gain", 0.0)
                         
                         state.shares -= shares_sold
+                        if state.shares < 0:
+                            raise RuntimeError("STRATEGY CONTRACT VIOLATION: state.shares cannot go below zero.")
+                        
                         shares_sold_monthly[year_month] = shares_sold_this_month + int(shares_sold)
                         state.cash += (cash_gen - taxes_paid)
                         state.cumulative_taxes += taxes_paid
@@ -683,6 +695,9 @@ class StrategyUnwindEngine:
                         
                         tlh_used_here = min(state.tlh_inventory, realized_gain)
                         state.tlh_inventory -= tlh_used_here
+                        if state.tlh_inventory < 0:
+                            raise RuntimeError("STRATEGY CONTRACT VIOLATION: tlh_inventory cannot go below zero.")
+                            
                         state.total_tlh_used += tlh_used_here
                         state.cumulative_tlh = state.tlh_inventory
 
@@ -747,31 +762,45 @@ class StrategyUnwindEngine:
             if strategy_key in ("tax_neutral", "harvest") and state.tlh_inventory > 0:
                 gain_per_share = current_price - state.cost_basis
                 trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
+                trigger_met = current_price >= trigger_px
                 
-                if current_price >= trigger_px and gain_per_share > 0:
+                if trigger_met and gain_per_share > 0:
                     remaining_monthly_capacity = max_shares_per_month - shares_sold_monthly.get(year_month, 0)
                     if remaining_monthly_capacity > 0 and state.shares > 0:
-                        max_shares_by_tlh = int(floor(state.tlh_inventory / gain_per_share))
-                        shares_to_sell = min(max_shares_by_tlh, remaining_monthly_capacity, int(state.shares))
+                        
+                        shares_to_sell = 0
+                        if strategy_key == "harvest":
+                            print(f"[SELL_BLOCKED] | reason=harvest_mode | shares_sold=0")
+                        else:
+                            max_shares_by_tlh = int(floor(state.tlh_inventory / gain_per_share))
+                            shares_to_sell = min(max_shares_by_tlh, remaining_monthly_capacity, int(state.shares))
+                            
+                        # --- STRATEGY CONTRACT GUARDS ---
+                        if shares_to_sell > 0:
+                            if strategy_key == "harvest":
+                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: harvest mode attempted to sell shares.")
+                            if not trigger_met:
+                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: tax-neutral mode attempted to sell shares without trigger_met being True.")
+                        # --------------------------------
                         
                         if shares_to_sell > 0:
-                            proceeds = 0.0
-                            cost = 0.0
-                            if strategy_key == "harvest":
-                                print(f"[SELL_BLOCKED] | reason=harvest_mode | shares_sold=0")
-                                shares_to_sell = 0  # Re-enforce zeroing out in Harvest
-                            else:
-                                proceeds = shares_to_sell * current_price
-                                cost = shares_to_sell * state.cost_basis
+                            proceeds = shares_to_sell * current_price
+                            cost = shares_to_sell * state.cost_basis
                                 
                             realized_gain = max(0.0, proceeds - cost)
                             
                             tlh_used_here = min(state.tlh_inventory, realized_gain)
                             state.tlh_inventory -= tlh_used_here
+                            if state.tlh_inventory < 0:
+                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: tlh_inventory cannot go below zero.")
+                                
                             state.total_tlh_used += tlh_used_here
                             state.cumulative_tlh = state.tlh_inventory
                             
                             state.shares -= shares_to_sell
+                            if state.shares < 0:
+                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: state.shares cannot go below zero.")
+                            
                             shares_sold_monthly[year_month] = shares_sold_monthly.get(year_month, 0) + shares_to_sell
                             state.cash += proceeds
                             state.realized_stock_gain += realized_gain
