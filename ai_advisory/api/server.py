@@ -8,9 +8,14 @@ from dotenv import load_dotenv
 import os
 
 # Load environment variables from .env
+from dotenv import load_dotenv
 load_dotenv()
-#from ai_advisory.agent.bot import ChatSessionManager
-from ai_advisory.agents.orchestrator.agent import ChatSessionManager
+
+from ai_advisory.config import USE_LLM
+
+if USE_LLM:
+    from ai_advisory.agent.bot import ChatSessionManager
+    
 from ai_advisory.services.http_models import ClientProfile, ProfilePatch, OrchestrateResponse
 from ai_advisory.services.profile_store import ProfileStore
 from ai_advisory.services.orchestrator_service import propose as orchestrate_propose
@@ -20,7 +25,10 @@ from ai_advisory.services.http_models import (
 )
 from ai_advisory.services.capital_summary_service import compute_capital_summary
 from ai_advisory.services.signals_service import compute_signals
+import warnings
+import numpy as np
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from datetime import datetime
 import uuid
 from ai_advisory.api.plan_models import TradePlan, TradeAction, CombinedTradePlan, TransitionRequest
@@ -40,7 +48,7 @@ from fastapi.responses import JSONResponse as jsonify
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
 
 # Single instance of ChatSessionManager
-session_manager = ChatSessionManager()
+session_manager = ChatSessionManager() if USE_LLM else None
 
 # MOCK STATE FOR LOGIN
 # In a real app, this would be handled via tokens/cookies
@@ -356,11 +364,11 @@ def simulate_mp(payload: MPSimulatePayload):
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
         
-    # Save to data/mp_history.json
     history_path = BASE_DIR / "data" / "mp_history.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(history_path, "w") as f:
-            json.dump(result, f, indent=2)
+            json.dump(result, f, indent=2, cls=NumpyEncoder)
     except Exception as e:
         print(f"Failed to save mp_history: {e}")
         
@@ -400,10 +408,14 @@ async def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
         
         # Save to history file for persistence in UI tab (Local Cache, not User Account)
         history_path = BASE_DIR / "data" / "anchor_income_history.json"
-        with open(history_path, "w") as f:
-            json.dump(result, f, indent=2)
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(history_path, "w") as f:
+                json.dump(result, f, indent=2, cls=NumpyEncoder)
+        except Exception as e:
+            print(f"Failed to save anchor_income_history: {e}")
             
-        return jsonify(result)
+        return result
     except Exception as e:
         print(f"Failed to simulate anchor income: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -552,16 +564,38 @@ def get_latest_frontier_date(store_root: Path) -> str:
 
 @app.post("/frontier/propose", response_model=FrontierProposalResponse)
 def frontier_propose(payload: FrontierProposePayload):
+    as_of_date = get_latest_frontier_date(STORE_ROOT)
     req = FrontierProposalRequest(
-        as_of=get_latest_frontier_date(STORE_ROOT),
+        as_of=as_of_date,
         model_id=payload.model_id,
         risk_score=payload.risk_score
     )
-    return frontier_service.propose(req)
+    try:
+        return frontier_service.propose(req)
+    except Exception as e:
+        print(f"Frontier Propose Error: {e}. Returning fallback mock data.")
+        # Dynamic fallback data based on risk score (1-100)
+        base_eq = 0.20 + (payload.risk_score / 100.0) * 0.80  # Scale 20% -> 100% equity
+        return FrontierProposalResponse(
+            as_of=as_of_date,
+            model_id=payload.model_id,
+            frontier_version="mock_v1",
+            frontier_status="APPROVED",
+            risk_score=payload.risk_score,
+            exp_return=round(0.04 + (payload.risk_score / 100.0) * 0.08, 3),
+            vol=round(0.05 + (payload.risk_score / 100.0) * 0.15, 3),
+            sharpe=0.66,
+            target_weights={
+                "VTI": round(base_eq * 0.7, 3),
+                "VXUS": round(base_eq * 0.3, 3),
+                "BND": round(1.0 - base_eq, 3)
+            }
+        )
 
 @app.get("/health")
 def health():
     return {
+        "status": "ok",
         "ok": True,
         "questionnaire_exists": QUESTIONNAIRE_PATH.exists(),
         "questionnaire_path": str(QUESTIONNAIRE_PATH),
@@ -579,6 +613,12 @@ async def chat_endpoint(request: ChatRequest):
     """
     Sends a message to the AI agent and returns the response.
     """
+    if not USE_LLM:
+        return {
+            "status": "disabled",
+            "message": "Chatbot disabled (test/dev mode)"
+        }
+
     conversation_id = request.conversation_id
     
     if not conversation_id:

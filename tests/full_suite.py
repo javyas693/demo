@@ -8,8 +8,24 @@ def main():
     print("===================================")
     
     tests_dir = os.path.dirname(os.path.abspath(__file__))
+    app_boot_script = os.path.join(tests_dir, "app_boot_test.py")
+    chat_resilience_script = os.path.join(tests_dir, "test_chat_resilience.py")
     smoke_script = os.path.join(tests_dir, "smoke_test.py")
     regression_script = os.path.join(tests_dir, "regression_test.py")
+    
+    # 0. Run Boot Test
+    print("\nRunning test: app_boot_test.py...")
+    res_boot = subprocess.run([sys.executable, app_boot_script], capture_output=False)
+    if res_boot.returncode != 0:
+        print("\n=> FAIL: APP BOOT TEST FAILED")
+        sys.exit(1)
+        
+    # 0b. Run Chat Resilience Test
+    print("\nRunning test: test_chat_resilience.py...")
+    res_chat = subprocess.run([sys.executable, chat_resilience_script], capture_output=False)
+    if res_chat.returncode != 0:
+        print("\n=> FAIL: CHAT RESILIENCE TEST FAILED")
+        sys.exit(1)
     
     # 1. Run Smoke Test
     print("\nRunning test: smoke_test.py...")

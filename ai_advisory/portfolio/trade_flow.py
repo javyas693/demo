@@ -58,10 +58,15 @@ def propose_from_latest_frontier(
         raise TradeFlowError(f"Frontier {fv} has no sampled points")
 
     n = len(fr.points_sampled)
-    if risk_score < 1 or risk_score > n:
-        raise TradeFlowError(f"risk_score out of range: {risk_score} (valid 1..{n})")
-
-    p: FrontierPoint = fr.points_sampled[risk_score - 1]
+    
+    # Map the UI risk score (1-100) to the available frontier points interpolation indices (0 to n-1)
+    bounded_score = max(1, min(100, risk_score))
+    if n == 1:
+        idx = 0
+    else:
+        idx = int(round((bounded_score - 1) / 99.0 * (n - 1)))
+        
+    p: FrontierPoint = fr.points_sampled[idx]
 
     # weights can be tuple aligned to fr.assets (fs_store returns tuple)
     if isinstance(p.weights, dict):

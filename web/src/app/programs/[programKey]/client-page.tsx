@@ -167,6 +167,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
 
     const handleRunMPSimulation = async () => {
         if (!mpAllocations || !mpCapital) return;
+        setMpSimulationData(null);
         setMpSimIsLoading(true);
         try {
             const params = {
@@ -178,6 +179,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
             const res = await postMPSimulate(params);
             setMpSimulationData(res);
             setMpLastRunRef({ start: mpStartDate, end: mpEndDate });
+            setActiveTab("historical"); // Auto navigate to History on success
         } catch (e) {
             console.error("Simulation failed", e);
         } finally {
@@ -190,8 +192,25 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
         try {
             const res = await postFrontierPropose(mpRiskTarget);
             setMpAllocations(res);
+            
+            // Auto-run simulation in background so History tab stays in sync
+            if (mpCapital) {
+                try {
+                    const simParams = {
+                        target_weights: res.target_weights,
+                        initial_capital: Number(mpCapital),
+                        start_date: mpStartDate,
+                        end_date: mpEndDate
+                    };
+                    const simRes = await postMPSimulate(simParams);
+                    setMpSimulationData(simRes);
+                    setMpLastRunRef({ start: mpStartDate, end: mpEndDate });
+                } catch (simError) {
+                    console.error("Auto-simulation failed", simError);
+                }
+            }
         } catch (e) {
-            console.error(e);
+            console.error("Generate MP failed", e);
         } finally {
             setMpIsLoading(false);
         }
@@ -239,20 +258,24 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
 
     React.useEffect(() => {
         if (programKey === 'core_allocation' && activeTab === 'historical') {
-            getMPHistory().then(data => {
-                if (data && data.summary) {
-                    setMpSimulationData(data);
-                    // Only overwrite the ref if we don't already have one from a fresh run
-                    setMpLastRunRef(prev => prev || { start: "Persisted", end: "Backtest" });
-                }
-            }).catch(e => console.error("Failed to load mp history", e));
+            if (!mpSimulationData) {
+                getMPHistory().then(data => {
+                    if (data && data.summary) {
+                        setMpSimulationData(data);
+                        // Only overwrite the ref if we don't already have one from a fresh run
+                        setMpLastRunRef(prev => prev || { start: "Persisted", end: "Backtest" });
+                    }
+                }).catch(e => console.error("Failed to load mp history", e));
+            }
         } else if (programKey === 'anchor_income' && activeTab === 'historical') {
-            getAnchorIncomeHistory().then(data => {
-                if (data && data.summary) {
-                    setAnchorIncomeSimulationData(data);
-                    setAnchorIncomeLastRunRef(prev => prev || { start: "Persisted", end: "Backtest" });
-                }
-            }).catch(e => console.error("Failed to load anchor income history", e));
+            if (!anchorIncomeSimulationData) {
+                getAnchorIncomeHistory().then(data => {
+                    if (data && data.summary) {
+                        setAnchorIncomeSimulationData(data);
+                        setAnchorIncomeLastRunRef(prev => prev || { start: "Persisted", end: "Backtest" });
+                    }
+                }).catch(e => console.error("Failed to load anchor income history", e));
+            }
         }
     }, [programKey, activeTab]);
 
@@ -994,11 +1017,6 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                     <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Simulation: {mpLastRunRef.start} → {mpLastRunRef.end}</span>
                                                 )}
                                             </h4>
-                                            {mpAllocations && (
-                                                <Button onClick={handleRunMPSimulation} disabled={mpSimIsLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                                                    {mpSimIsLoading ? "Simulating..." : "Run Historical Backtest"}
-                                                </Button>
-                                            )}
                                         </div>
 
                                         {!mpSimulationData ? (
