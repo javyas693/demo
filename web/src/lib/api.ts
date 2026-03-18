@@ -109,6 +109,8 @@ export interface ChatResponse {
     user_name: string | null;
     agent_message: string;
     payload: any;
+    status?: string;
+    message?: string;
 }
 
 // Helpers

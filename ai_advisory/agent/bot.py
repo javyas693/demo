@@ -177,59 +177,75 @@ class ChatSessionManager:
 
         raw_response = ""
 
-        session = await self.get_or_create_session(
-            conversationId=conversation_id,
-            userId=user_id
-        )
-
-        async for event in self.runner.run_async(
-            user_id=user_id,
-            session_id=session.id,
-            new_message=types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=message)]
+        try:
+            session = await self.get_or_create_session(
+                conversationId=conversation_id,
+                userId=user_id
             )
-        ):
 
-            if event.is_final_response():
+            async for event in self.runner.run_async(
+                user_id=user_id,
+                session_id=session.id,
+                new_message=types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=message)]
+                )
+            ):
 
-                if event.content and event.content.parts:
+                if event.is_final_response():
 
-                    raw_response = event.content.parts[0].text
+                    if event.content and event.content.parts:
 
-        print(f"Raw response: {raw_response}")
+                        raw_response = event.content.parts[0].text
 
-        result_payload = self.parse_and_validate(
-            raw_response,
-            conversation_id
-        )
+            print(f"Raw response: {raw_response}")
 
-        # Deterministic workflow control
-        payload_data = result_payload.get("payload", {})
+            result_payload = self.parse_and_validate(
+                raw_response,
+                conversation_id
+            )
 
-        def find_score_recursively(d):
-            if not isinstance(d, dict):
+            # Deterministic workflow control
+            payload_data = result_payload.get("payload", {})
+
+            def find_score_recursively(d):
+                if not isinstance(d, dict):
+                    return None
+                if "final_risk_score" in d:
+                    return d["final_risk_score"]
+                if "total_risk_score" in d:
+                    return d["total_risk_score"]
+                for v in d.values():
+                    if isinstance(v, dict):
+                        res = find_score_recursively(v)
+                        if res is not None:
+                            return res
                 return None
-            if "final_risk_score" in d:
-                return d["final_risk_score"]
-            if "total_risk_score" in d:
-                return d["total_risk_score"]
-            for v in d.values():
-                if isinstance(v, dict):
-                    res = find_score_recursively(v)
-                    if res is not None:
-                        return res
-            return None
 
-        score_val = find_score_recursively(payload_data)
-        
-        if score_val is not None:
-            if isinstance(score_val, (int, float)) and score_val <= 1.0:
-                score_val = round(100.0 - (100.0 * float(score_val)), 2)
+            score_val = find_score_recursively(payload_data)
+            
+            if score_val is not None:
+                if isinstance(score_val, (int, float)) and score_val <= 1.0:
+                    score_val = round(100.0 - (100.0 * float(score_val)), 2)
 
-            result_payload["response_type"] = "risk_score_complete"
-            payload_data["final_risk_score"] = score_val
-            payload_data["next_page"] = "your-capital-today"
-            result_payload["payload"] = payload_data
+                result_payload["response_type"] = "risk_score_complete"
+                payload_data["final_risk_score"] = score_val
+                payload_data["next_page"] = "your-capital-today"
+                result_payload["payload"] = payload_data
 
-        return result_payload
+            return result_payload
+
+        except Exception as e:
+            print(f"Agent failsafe triggered: {e}")
+            return {
+                "conversation_id": conversation_id,
+                "response_type": "error",
+                "sequence": -1,
+                "user_name": None,
+                "agent_message": "The AI assistant is temporarily unavailable.",
+                "payload": {
+                    "status": "fallback",
+                    "error_code": "AGENT_UNAVAILABLE",
+                    "message": str(e)
+                }
+            }

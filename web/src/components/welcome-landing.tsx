@@ -48,6 +48,16 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
                 conversation_id: conversationId
             })
 
+            if (response.status === 'disabled' || response.payload?.status === 'fallback') {
+                const message = response.message || response.agent_message || "Chatbot is disabled in test mode. Automatically skipping setup...";
+                setMessages(prev => [...prev, { role: 'assistant', content: message }]);
+                setIsComplete(true);
+                setTimeout(() => {
+                    onGetStarted();
+                }, 2000);
+                return;
+            }
+
             setConversationId(response.conversation_id)
             setMessages(prev => [...prev, { role: 'assistant', content: response.agent_message }])
 
@@ -67,7 +77,7 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
             }
         } catch (error) {
             console.error("Chat error:", error)
-            setMessages(prev => [...prev, { role: 'assistant', content: "I'm sorry, I'm having trouble connecting right now. Please try again." }])
+            setMessages(prev => [...prev, { role: 'assistant', content: "I'm sorry, I'm having trouble connecting right now. Please try again or Skip Setup." }])
         } finally {
             setIsTyping(false)
         }
@@ -88,10 +98,16 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
         <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col items-center justify-center p-6 relative overflow-hidden selection:bg-indigo-500/30 font-sans">
 
             {/* Top Right Login */}
-            <div className="absolute top-6 right-8">
+            <div className="absolute top-6 right-8 flex gap-4">
+                <button 
+                  onClick={onGetStarted}
+                  className="text-sm border border-zinc-700 hover:border-zinc-500 rounded-full py-1.5 px-3 font-medium text-zinc-400 hover:text-white transition-colors"
+                >
+                  Skip Setup
+                </button>
                 <button 
                   onClick={onLogin}
-                  className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+                  className="text-sm font-medium text-zinc-400 hover:text-white transition-colors py-1.5"
                 >
                   Log In
                 </button>
@@ -215,13 +231,23 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
                                     <p className="text-xl text-zinc-300 mb-8 max-w-md font-medium">
                                         "Let’s design how your wealth should work for you."
                                     </p>
-                                    <Button
-                                        size="lg"
-                                        className="h-12 px-8 rounded-full bg-white text-black hover:bg-zinc-200 hover:scale-105 transition-all text-base font-semibold"
-                                        onClick={() => setStep('chat')}
-                                    >
-                                        Begin <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-4">
+                                        <Button
+                                            size="lg"
+                                            className="h-12 px-8 rounded-full bg-white text-black hover:bg-zinc-200 hover:scale-105 transition-all text-base font-semibold"
+                                            onClick={() => setStep('chat')}
+                                        >
+                                            Begin <ArrowRight className="ml-2 h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            size="lg"
+                                            variant="outline"
+                                            className="h-12 px-8 rounded-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all text-base font-semibold"
+                                            onClick={onGetStarted}
+                                        >
+                                            Skip Setup
+                                        </Button>
+                                    </div>
                                 </motion.div>
                             ) : (
                                 // Chat State Content
