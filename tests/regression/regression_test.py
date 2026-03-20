@@ -2,7 +2,7 @@ import os
 import sys
 import json
 from unittest.mock import patch
-from test_utils import mock_yf_download
+from tests.helpers.test_utils import mock_yf_download
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from ai_advisory.strategy.strategy_unwind import StrategyUnwindEngine
@@ -50,7 +50,8 @@ def run_regression_test(mock_download):
     
     # Scenario A: Moderate parameters
     args_A = dict(
-        strategy_mode="tax_neutral",
+        enable_unwind=True,
+        enable_tlh=False,
         enable_tax_loss_harvest=True,
         share_reduction_trigger_pct=0.3,
         cost_basis=100.0,
@@ -64,7 +65,8 @@ def run_regression_test(mock_download):
     
     # Scenario B: Aggressive parameters
     args_B = dict(
-        strategy_mode="tax_neutral",
+        enable_unwind=True,
+        enable_tlh=False,
         enable_tax_loss_harvest=True,
         share_reduction_trigger_pct=0.1,  # triggers faster
         cost_basis=100.0,

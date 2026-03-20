@@ -5,11 +5,36 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from typing import Optional
 from dotenv import load_dotenv
+from dotenv import load_dotenv
 import os
+import logging
 
 # Load environment variables from .env
 from dotenv import load_dotenv
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(message)s",
+    filename="simulation_output.txt",
+    filemode="w"
+)
+
+# Keep track of our specific handler
+_sim_handler = None
+for h in logging.getLogger().handlers:
+    if getattr(h, "baseFilename", "").endswith("simulation_output.txt"):
+        _sim_handler = h
+
+def clear_simulation_log():
+    if _sim_handler:
+        try:
+            _sim_handler.stream.seek(0)
+            _sim_handler.stream.truncate()
+        except:
+            pass
+
+logging.getLogger().addHandler(logging.StreamHandler())
 
 from ai_advisory.config import USE_LLM
 
@@ -44,6 +69,10 @@ from ai_advisory.frontier.store.fs_store import FileSystemFrontierStore
 from ai_advisory.services.concentrated_service import _sanitize_for_json
 from datetime import timedelta
 from fastapi.responses import JSONResponse as jsonify
+from ai_advisory.portfolio.portfolio_state import PortfolioState
+from ai_advisory.orchestration.portfolio_orchestrator import run_portfolio_cycle
+from ai_advisory.orchestration.time_simulator import simulate_portfolio
+from ai_advisory.orchestration.trace_logger import trace_log, reset_trace
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
 
@@ -220,6 +249,7 @@ class CoreParams(BaseModel):
     ticker: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    tlh_inventory: float = 0.0
 
 class CoveredCallParams(BaseModel):
     coverage_pct: float = 50.0
@@ -282,6 +312,12 @@ def adapt_request(payload: ConcentratedSimulatePayload) -> dict:
 
 @app.post("/programs/concentrated_position/simulate")
 def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
+    clear_simulation_log()
+
+    reset_trace()
+    trace_log("\n" + "="*50)
+    trace_log(f"--- [MODULE 1] TRACE START: /programs/concentrated_position/simulate ---")
+    
     params = adapt_request(payload)
     
     ticker = params["ticker"]
@@ -346,6 +382,154 @@ def simulate_concentrated_position(payload: ConcentratedSimulatePayload):
 
     return result
 
+class OrchestrateRequest(BaseModel):
+    total_portfolio_value: float
+    cash: float
+    concentrated_position_value: float
+    income_portfolio_value: float = 0.0
+    model_portfolio_value: float = 0.0
+    tlh_inventory: float
+    risk_score: float
+    income_preference: float
+    ticker: str = "SPY"
+    start_date: str = "2023-01-01"
+    end_date: str = "2023-10-01"
+    initial_shares: float = 8000.0
+    unwind_cost_basis: float = 100.0
+
+@app.post("/api/portfolio/orchestrate")
+def api_portfolio_orchestrate(req: OrchestrateRequest):
+    # Enforce STRICT concentrated baseline state
+    income_val = 0.0
+    model_val = 0.0
+    total_val = req.concentrated_position_value + req.cash
+
+    state = PortfolioState(
+        total_portfolio_value=total_val,
+        cash=req.cash,
+        ticker=req.ticker,
+        shares=req.initial_shares,
+        current_price=req.concentrated_position_value / req.initial_shares if req.initial_shares > 0 else 0.0,
+        cost_basis=req.unwind_cost_basis,
+        market_value=req.concentrated_position_value,
+        income_value=income_val,
+        annual_income=0.0, # Will be set generically or overridden 
+        model_value=model_val,
+        tlh_inventory=req.tlh_inventory,
+        risk_score=req.risk_score
+    )
+    res = run_portfolio_cycle(
+        state=state,
+        ticker=req.ticker,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_shares=req.initial_shares,
+        unwind_cost_basis=req.unwind_cost_basis,
+        income_preference=req.income_preference
+    )
+    
+    # Save history array to disk for the frontend history timeline tab to fetch
+    history_path = BASE_DIR / "data" / "orchestrator_history.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(history_path, "w") as f:
+            # Cleanly extract the time_series to disk
+            ts = res.get("nested_reports", {}).get("concentrated_position", {}).get("time_series", [])
+            json.dump(ts, f)
+    except Exception as e:
+        print(f"Failed to save orchestrator_history: {e}")
+        
+    return res
+
+@app.get("/api/portfolio/history")
+def api_portfolio_history():
+    history_path = BASE_DIR / "data" / "orchestrator_history.json"
+    if history_path.exists():
+        try:
+            with open(history_path, "r") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+@app.get("/api/portfolio/projection")
+def api_portfolio_projection():
+    # Stub for the projections tab
+    return {"status": "ok", "message": "Projections not yet implemented natively in v1 orchestrator."}
+
+class TimeSimulateRequest(OrchestrateRequest):
+    horizon_months: int = 12
+
+@app.post("/api/portfolio/simulate")
+def api_portfolio_simulate(req: TimeSimulateRequest):
+    clear_simulation_log()
+        
+    reset_trace()
+    trace_log("\n" + "="*50)
+    trace_log(f"--- [MODULE 1] TRACE START: /api/portfolio/simulate ---")
+    trace_log(f"INPUT RECEIVED: {req.model_dump()}")
+    trace_log("="*50 + "\n")
+    # Enforce STRICT concentrated baseline state
+    income_val = 0.0
+    model_val = 0.0
+    total_val = req.concentrated_position_value + req.cash
+
+    state = PortfolioState(
+        total_portfolio_value=total_val,
+        cash=req.cash,
+        ticker=req.ticker,
+        shares=req.initial_shares,
+        current_price=req.concentrated_position_value / req.initial_shares if req.initial_shares > 0 else 0.0,
+        cost_basis=req.unwind_cost_basis,
+        market_value=req.concentrated_position_value,
+        income_value=income_val,
+        annual_income=0.0,
+        model_value=model_val,
+        tlh_inventory=req.tlh_inventory,
+        risk_score=req.risk_score
+    )
+    
+    timeline = simulate_portfolio(
+        initial_state=state,
+        ticker=req.ticker,
+        initial_shares=req.initial_shares,
+        cost_basis=req.unwind_cost_basis,
+        horizon_months=req.horizon_months,
+        income_preference=req.income_preference
+    )
+    
+    total_capital_released = sum(s.get("capital_released_this_step", 0.0) for s in timeline)
+    total_allocated_income = sum(s.get("allocation_to_income_this_step", 0.0) for s in timeline)
+    total_allocated_model = sum(s.get("allocation_to_model_this_step", 0.0) for s in timeline)
+    
+    timeline_series = {
+        "total_portfolio": [s.get("total_portfolio_value", 0.0) for s in timeline],
+        "concentrated": [s.get("concentrated_value", 0.0) for s in timeline],
+        "income": [s.get("income_value", 0.0) for s in timeline],
+        "model": [s.get("model_value", 0.0) for s in timeline],
+        "cash": [s.get("cash", 0.0) for s in timeline],
+    }
+    
+    response_dict = {
+        "state": timeline[-1] if timeline else None,
+        "timeline": timeline,
+        "timeline_series": timeline_series,
+        "summary": {
+            "total_capital_released": total_capital_released,
+            "total_allocated_income": total_allocated_income,
+            "total_allocated_model": total_allocated_model,
+            "final_state": timeline[-1] if timeline else None
+        }
+    }
+    
+    trace_log("\n" + "="*50)
+    trace_log("--- [MODULE 6] OUTPUT TRACE ---")
+    trace_log(f"Final step values: {response_dict['summary']}")
+    trace_log(f"Reconciliation: {timeline[-1].get('reconciliation') if timeline else 'None'}")
+    trace_log("="*50 + "\n")
+
+    return _sanitize_for_json(response_dict)
+
 class MPSimulatePayload(BaseModel):
     target_weights: dict[str, float]
     initial_capital: float
@@ -364,15 +548,17 @@ def simulate_mp(payload: MPSimulatePayload):
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
         
+    sanitized_result = _sanitize_for_json(result)
+        
     history_path = BASE_DIR / "data" / "mp_history.json"
     history_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(history_path, "w") as f:
-            json.dump(result, f, indent=2, cls=NumpyEncoder)
+            json.dump(sanitized_result, f, indent=2)
     except Exception as e:
         print(f"Failed to save mp_history: {e}")
         
-    return result
+    return sanitized_result
 
 @app.get("/programs/core_allocation/history")
 def get_mp_history():
@@ -406,16 +592,18 @@ async def simulate_anchor_income(payload: AnchorIncomeSimulatePayload):
         )
         result = engine.simulate()
         
+        sanitized_result = _sanitize_for_json(result)
+        
         # Save to history file for persistence in UI tab (Local Cache, not User Account)
         history_path = BASE_DIR / "data" / "anchor_income_history.json"
         history_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with open(history_path, "w") as f:
-                json.dump(result, f, indent=2, cls=NumpyEncoder)
+                json.dump(sanitized_result, f, indent=2)
         except Exception as e:
             print(f"Failed to save anchor_income_history: {e}")
             
-        return result
+        return sanitized_result
     except Exception as e:
         print(f"Failed to simulate anchor income: {e}")
         raise HTTPException(status_code=400, detail=str(e))

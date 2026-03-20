@@ -74,6 +74,7 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
     const [inputShares, setInputShares] = React.useState<number | "">(1200);
     const [inputCostBasis, setInputCostBasis] = React.useState<number | "">(185.25);
     const [inputStartingCash, setInputStartingCash] = React.useState<number | "">(0);
+    const [inputTlhInventory, setInputTlhInventory] = React.useState<number | "">(50000);
     const [inputMaxSharesPerMonth, setInputMaxSharesPerMonth] = React.useState<number | "">(200);
     const [isSavingPosition, setIsSavingPosition] = React.useState(false);
 
@@ -507,6 +508,15 @@ export function ProgramWorkspaceClient({ programKey }: { programKey: string }) {
                                                 type="number"
                                                 value={inputStartingCash}
                                                 onChange={e => setInputStartingCash(e.target.value ? Number(e.target.value) : "")}
+                                                className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-950 dark:placeholder:text-zinc-400 dark:focus-visible:ring-indigo-400"
+                                            />
+                                        </div>
+                                        <div className="space-y-2 flex-1">
+                                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">TLH Inventory</label>
+                                            <input
+                                                type="number"
+                                                value={inputTlhInventory}
+                                                onChange={e => setInputTlhInventory(e.target.value ? Number(e.target.value) : "")}
                                                 className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-950 dark:placeholder:text-zinc-400 dark:focus-visible:ring-indigo-400"
                                             />
                                         </div>

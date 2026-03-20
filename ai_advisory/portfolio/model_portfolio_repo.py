@@ -46,9 +46,19 @@ def default_model_portfolio_repo(frontier_version: str = "frontier_v0") -> Model
     )
     conservative.validate()
 
+    aggressive = ModelPortfolio(
+        name="aggressive",
+        weights={"VTI": 0.60, "VXUS": 0.30, "BND": 0.10},
+        expected_return=0.075,
+        volatility=0.16,
+        frontier_version=frontier_version,
+    )
+    aggressive.validate()
+
     return ModelPortfolioRepo(
         portfolios={
             core_balanced.name: core_balanced,
             conservative.name: conservative,
+            aggressive.name: aggressive,
         }
     )

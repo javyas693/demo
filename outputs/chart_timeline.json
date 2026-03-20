@@ -1,0 +1,1009 @@
+[
+  {
+    "step_index": 0,
+    "year_index": 0,
+    "month": 0,
+    "date": "Baseline",
+    "total_portfolio_value": 221166.07666015625,
+    "total_ecosystem_value": 221166.07666015625,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 221166.07666015625,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 221166.07666015625,
+        "shares_sold": 0.0,
+        "price": 221.16607666015625
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 0.0,
+        "income_generated_this_step": 0.0,
+        "holdings": {}
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 0.0,
+        "growth_generated_this_step": 0.0,
+        "holdings": {}
+      }
+    },
+    "capital_released_this_step": 0.0,
+    "allocation_to_income_this_step": 0.0,
+    "allocation_to_model_this_step": 0.0,
+    "total_return_index": 1.0,
+    "income_generated_to_date": 0.0,
+    "model_growth_to_date": 0.0,
+    "income_generated_this_step": 0.0,
+    "cumulative_income_generated": 0.0,
+    "model_growth_this_step": 0.0,
+    "cp_price": 221.16607666015625,
+    "attr_income_allocated": 0.0,
+    "attr_income_generated": 0.0,
+    "attr_model_allocated": 0.0,
+    "attr_model_growth": 0.0,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {}
+    }
+  },
+  {
+    "step_index": 1,
+    "year_index": 0,
+    "month": 1,
+    "date": "Month 1",
+    "total_portfolio_value": 211577.85034179688,
+    "total_ecosystem_value": 211577.85034179688,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 211577.85034179688,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 211577.85034179688,
+        "shares_sold": 0,
+        "price": 211.57785034179688
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 0.9566469394260104,
+    "income_generated_to_date": -226.09298706068978,
+    "model_growth_to_date": -226.09298706068978,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -226.09298706068978,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 211.57785034179688,
+    "attr_income_allocated": 226.09298706068978,
+    "attr_income_generated": -226.09298706068978,
+    "attr_model_allocated": 226.09298706068978,
+    "attr_model_growth": -226.09298706068978,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 221166.07666015625,
+        "end_value": 211577.85034179688,
+        "cp_change": -9588.226318359375,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 211577.85034179688,
+        "component_sum": 211577.85034179688,
+        "concentrated_value": 211577.85034179688,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 2,
+    "year_index": 0,
+    "month": 2,
+    "date": "Month 2",
+    "total_portfolio_value": 200240.66162109375,
+    "total_ecosystem_value": 200240.66162109375,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 200240.66162109375,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 200240.66162109375,
+        "shares_sold": 0,
+        "price": 200.24066162109375
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 0.905385964452331,
+    "income_generated_to_date": -452.18597412137956,
+    "model_growth_to_date": -452.18597412137956,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -452.18597412137956,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 200.24066162109375,
+    "attr_income_allocated": 452.18597412137956,
+    "attr_income_generated": -452.18597412137956,
+    "attr_model_allocated": 452.18597412137956,
+    "attr_model_growth": -452.18597412137956,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 211577.85034179688,
+        "end_value": 200240.66162109375,
+        "cp_change": -11337.188720703125,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 200240.66162109375,
+        "component_sum": 200240.66162109375,
+        "concentrated_value": 200240.66162109375,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 3,
+    "year_index": 0,
+    "month": 3,
+    "date": "Month 3",
+    "total_portfolio_value": 204547.5311279297,
+    "total_ecosystem_value": 204547.5311279297,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 204547.5311279297,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 204547.5311279297,
+        "shares_sold": 0,
+        "price": 204.5475311279297
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 0.9248594278870235,
+    "income_generated_to_date": -678.2789611820693,
+    "model_growth_to_date": -678.2789611820693,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -678.2789611820693,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 204.5475311279297,
+    "attr_income_allocated": 678.2789611820693,
+    "attr_income_generated": -678.2789611820693,
+    "attr_model_allocated": 678.2789611820693,
+    "attr_model_growth": -678.2789611820693,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 200240.66162109375,
+        "end_value": 204547.5311279297,
+        "cp_change": 4306.8695068359375,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 204547.5311279297,
+        "component_sum": 204547.5311279297,
+        "concentrated_value": 204547.5311279297,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 4,
+    "year_index": 0,
+    "month": 4,
+    "date": "Month 4",
+    "total_portfolio_value": 206940.2618408203,
+    "total_ecosystem_value": 206940.2618408203,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 206940.2618408203,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 206940.2618408203,
+        "shares_sold": 0,
+        "price": 206.9402618408203
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 0.9356781336714883,
+    "income_generated_to_date": -904.3719482427591,
+    "model_growth_to_date": -904.3719482427591,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -904.3719482427591,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 206.9402618408203,
+    "attr_income_allocated": 904.3719482427591,
+    "attr_income_generated": -904.3719482427591,
+    "attr_model_allocated": 904.3719482427591,
+    "attr_model_growth": -904.3719482427591,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 204547.5311279297,
+        "end_value": 206940.2618408203,
+        "cp_change": 2392.730712890625,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 206940.2618408203,
+        "component_sum": 206940.2618408203,
+        "concentrated_value": 206940.2618408203,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 5,
+    "year_index": 0,
+    "month": 5,
+    "date": "Month 5",
+    "total_portfolio_value": 231698.37951660156,
+    "total_ecosystem_value": 231698.37951660156,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 231698.37951660156,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 231698.37951660156,
+        "shares_sold": 0,
+        "price": 231.69837951660156
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.0476216923295576,
+    "income_generated_to_date": -1130.4649353034488,
+    "model_growth_to_date": -1130.4649353034488,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -1130.4649353034488,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 231.69837951660156,
+    "attr_income_allocated": 1130.4649353034488,
+    "attr_income_generated": -1130.4649353034488,
+    "attr_model_allocated": 1130.4649353034488,
+    "attr_model_growth": -1130.4649353034488,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 206940.2618408203,
+        "end_value": 231698.37951660156,
+        "cp_change": 24758.11767578125,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 231698.37951660156,
+        "component_sum": 231698.37951660156,
+        "concentrated_value": 231698.37951660156,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 6,
+    "year_index": 0,
+    "month": 6,
+    "date": "Month 6",
+    "total_portfolio_value": 254145.59936523438,
+    "total_ecosystem_value": 254145.59936523438,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 254145.59936523438,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 254145.59936523438,
+        "shares_sold": 0,
+        "price": 254.14559936523438
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.1491165517022506,
+    "income_generated_to_date": -1356.5579223641384,
+    "model_growth_to_date": -1356.5579223641384,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -1356.5579223641384,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 254.14559936523438,
+    "attr_income_allocated": 1356.5579223641384,
+    "attr_income_generated": -1356.5579223641384,
+    "attr_model_allocated": 1356.5579223641384,
+    "attr_model_growth": -1356.5579223641384,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 231698.37951660156,
+        "end_value": 254145.59936523438,
+        "cp_change": 22447.219848632812,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 254145.59936523438,
+        "component_sum": 254145.59936523438,
+        "concentrated_value": 254145.59936523438,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 7,
+    "year_index": 0,
+    "month": 7,
+    "date": "Month 7",
+    "total_portfolio_value": 269855.65185546875,
+    "total_ecosystem_value": 269855.65185546875,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 269855.65185546875,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 269855.65185546875,
+        "shares_sold": 0,
+        "price": 269.85565185546875
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.2201493824485972,
+    "income_generated_to_date": -1582.6509094248281,
+    "model_growth_to_date": -1582.6509094248281,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -1582.6509094248281,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 269.85565185546875,
+    "attr_income_allocated": 1582.6509094248281,
+    "attr_income_generated": -1582.6509094248281,
+    "attr_model_allocated": 1582.6509094248281,
+    "attr_model_growth": -1582.6509094248281,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 254145.59936523438,
+        "end_value": 269855.65185546875,
+        "cp_change": 15710.052490234375,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 269855.65185546875,
+        "component_sum": 269855.65185546875,
+        "concentrated_value": 269855.65185546875,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 8,
+    "year_index": 0,
+    "month": 8,
+    "date": "Month 8",
+    "total_portfolio_value": 278589.3249511719,
+    "total_ecosystem_value": 278589.3249511719,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 278589.3249511719,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 278589.3249511719,
+        "shares_sold": 0,
+        "price": 278.5893249511719
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.259638589959943,
+    "income_generated_to_date": -1808.7438964855178,
+    "model_growth_to_date": -1808.7438964855178,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -1808.7438964855178,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 278.5893249511719,
+    "attr_income_allocated": 1808.7438964855178,
+    "attr_income_generated": -1808.7438964855178,
+    "attr_model_allocated": 1808.7438964855178,
+    "attr_model_growth": -1808.7438964855178,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 269855.65185546875,
+        "end_value": 278589.3249511719,
+        "cp_change": 8733.673095703125,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 278589.3249511719,
+        "component_sum": 278589.3249511719,
+        "concentrated_value": 278589.3249511719,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 9,
+    "year_index": 0,
+    "month": 9,
+    "date": "Month 9",
+    "total_portfolio_value": 271605.8349609375,
+    "total_ecosystem_value": 271605.8349609375,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 271605.8349609375,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 271605.8349609375,
+        "shares_sold": 0,
+        "price": 271.6058349609375
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.2280628162441338,
+    "income_generated_to_date": -2034.8368835462074,
+    "model_growth_to_date": -2034.8368835462074,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -2034.8368835462074,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 271.6058349609375,
+    "attr_income_allocated": 2034.8368835462074,
+    "attr_income_generated": -2034.8368835462074,
+    "attr_model_allocated": 2034.8368835462074,
+    "attr_model_growth": -2034.8368835462074,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 278589.3249511719,
+        "end_value": 271605.8349609375,
+        "cp_change": -6983.489990234375,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 271605.8349609375,
+        "component_sum": 271605.8349609375,
+        "concentrated_value": 271605.8349609375,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 10,
+    "year_index": 0,
+    "month": 10,
+    "date": "Month 10",
+    "total_portfolio_value": 259237.4267578125,
+    "total_ecosystem_value": 259237.4267578125,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 259237.4267578125,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 259237.4267578125,
+        "shares_sold": 0,
+        "price": 259.2374267578125
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.1721391936438637,
+    "income_generated_to_date": -2260.929870606897,
+    "model_growth_to_date": -2260.929870606897,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -2260.929870606897,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 259.2374267578125,
+    "attr_income_allocated": 2260.929870606897,
+    "attr_income_generated": -2260.929870606897,
+    "attr_model_allocated": 2260.929870606897,
+    "attr_model_growth": -2260.929870606897,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 271605.8349609375,
+        "end_value": 259237.4267578125,
+        "cp_change": -12368.408203125,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 259237.4267578125,
+        "component_sum": 259237.4267578125,
+        "concentrated_value": 259237.4267578125,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 11,
+    "year_index": 0,
+    "month": 11,
+    "date": "Month 11",
+    "total_portfolio_value": 264179.99267578125,
+    "total_ecosystem_value": 264179.99267578125,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 264179.99267578125,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 264179.99267578125,
+        "shares_sold": 0,
+        "price": 264.17999267578125
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.1944869514582934,
+    "income_generated_to_date": -2487.022857667587,
+    "model_growth_to_date": -2487.022857667587,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -2487.022857667587,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 264.17999267578125,
+    "attr_income_allocated": 2487.022857667587,
+    "attr_income_generated": -2487.022857667587,
+    "attr_model_allocated": 2487.022857667587,
+    "attr_model_growth": -2487.022857667587,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 259237.4267578125,
+        "end_value": 264179.99267578125,
+        "cp_change": 4942.56591796875,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 264179.99267578125,
+        "component_sum": 264179.99267578125,
+        "concentrated_value": 264179.99267578125,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  },
+  {
+    "step_index": 12,
+    "year_index": 1,
+    "month": 12,
+    "date": "Month 12",
+    "total_portfolio_value": 248960.0067138672,
+    "total_ecosystem_value": 248960.0067138672,
+    "cash": 0.0,
+    "concentration_pct": 100.0,
+    "concentrated_value": 248960.0067138672,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 248960.0067138672,
+        "shares_sold": 0,
+        "price": 248.9600067138672
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "income_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "JEPQ": 0.0,
+          "TLTW": 0.0,
+          "SVOL": 0.0
+        }
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 226.09298706068978,
+        "growth_generated_this_step": -226.09298706068978,
+        "holdings": {
+          "VTI": 0.0,
+          "TLT": 0.0
+        }
+      }
+    },
+    "capital_released_this_step": 452.18597412137956,
+    "allocation_to_income_this_step": 226.09298706068978,
+    "allocation_to_model_this_step": 226.09298706068978,
+    "total_return_index": 1.1256699511671453,
+    "income_generated_to_date": -2713.1158447282764,
+    "model_growth_to_date": -2713.1158447282764,
+    "income_generated_this_step": -226.09298706068978,
+    "cumulative_income_generated": -2713.1158447282764,
+    "model_growth_this_step": -226.09298706068978,
+    "cp_price": 248.9600067138672,
+    "attr_income_allocated": 2713.1158447282764,
+    "attr_income_generated": -2713.1158447282764,
+    "attr_model_allocated": 2713.1158447282764,
+    "attr_model_growth": -2713.1158447282764,
+    "attr_cp_initial_value": 221166.07666015625,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 264179.99267578125,
+        "end_value": 248960.0067138672,
+        "cp_change": -15219.985961914062,
+        "income_change": 0.0,
+        "model_change": 0.0,
+        "cash_change": 0.0,
+        "reconstructed_end": 248960.0067138672,
+        "component_sum": 248960.0067138672,
+        "concentrated_value": 248960.0067138672,
+        "income_value": 0.0,
+        "model_value": 0.0,
+        "cash": 0.0
+      }
+    }
+  }
+]

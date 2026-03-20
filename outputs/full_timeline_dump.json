@@ -1,0 +1,1751 @@
+[
+  {
+    "step_index": 0,
+    "year_index": 0,
+    "month": 0,
+    "date": "Baseline",
+    "total_portfolio_value": 250000.0,
+    "total_ecosystem_value": 250000.0,
+    "cash": 100000.0,
+    "concentration_pct": 60.0,
+    "concentrated_value": 150000.0,
+    "income_value": 0.0,
+    "model_value": 0.0,
+    "shares": 1000.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 1000.0,
+        "value": 150000.0,
+        "shares_sold": 0.0,
+        "price": 150.0
+      },
+      "income": {
+        "value": 0.0,
+        "annual_income": 0.0,
+        "capital_allocated": 0.0,
+        "income_generated_this_step": 0.0
+      },
+      "model": {
+        "value": 0.0,
+        "capital_allocated": 0.0,
+        "growth_generated_this_step": 0.0
+      }
+    },
+    "capital_released_this_step": 0.0,
+    "allocation_to_income_this_step": 0.0,
+    "allocation_to_model_this_step": 0.0,
+    "total_return_index": 1.0,
+    "income_generated_to_date": 0.0,
+    "model_growth_to_date": 0.0,
+    "income_generated_this_step": 0.0,
+    "cumulative_income_generated": 0.0,
+    "model_growth_this_step": 0.0,
+    "cp_price": 150.0,
+    "attr_income_allocated": 0.0,
+    "attr_income_generated": 0.0,
+    "attr_model_allocated": 0.0,
+    "attr_model_growth": 0.0,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 0.0,
+    "decision_trace": [],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {}
+    }
+  },
+  {
+    "step_index": 1,
+    "year_index": 0,
+    "month": 1,
+    "date": "Month 1",
+    "total_portfolio_value": 250992.7326975884,
+    "total_ecosystem_value": 250992.7326975884,
+    "cash": 100000.0,
+    "concentration_pct": 59.23883398443531,
+    "concentrated_value": 148685.16823572188,
+    "income_value": 1158.7615808767478,
+    "model_value": 1148.802880989773,
+    "shares": 988.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 988.0,
+        "value": 148685.16823572188,
+        "shares_sold": 12,
+        "price": 150.49106096732984
+      },
+      "income": {
+        "value": 1158.7615808767478,
+        "annual_income": 69.52569485260486,
+        "capital_allocated": 1142.3439024827198,
+        "income_generated_this_step": 5.6130089830457175
+      },
+      "model": {
+        "value": 1148.802880989773,
+        "capital_allocated": 1142.3439024827198,
+        "growth_generated_this_step": 6.45897850705321
+      }
+    },
+    "capital_released_this_step": 2284.6878049654397,
+    "allocation_to_income_this_step": 1142.3439024827198,
+    "allocation_to_model_this_step": 1142.3439024827198,
+    "total_return_index": 1.0039709307903535,
+    "income_generated_to_date": 16.417678394027917,
+    "model_growth_to_date": 6.458978507053189,
+    "income_generated_this_step": 5.6130089830457175,
+    "cumulative_income_generated": 5.6130089830457175,
+    "model_growth_this_step": 6.45897850705321,
+    "cp_price": 150.49106096732984,
+    "attr_income_allocated": 1142.3439024827198,
+    "attr_income_generated": 5.6130089830457175,
+    "attr_model_allocated": 1142.3439024827198,
+    "attr_model_growth": 6.45897850705321,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 1800.0,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.688221",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.6,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 30.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.688227",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 30.0,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.25,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.688228",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 1000.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.717932",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 12,
+          "cash_released_from_liquidation": 2284.6878049654397
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.717937",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2284.6878049654397,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1142.3439024827198,
+          "allocation_to_model": 1142.3439024827198
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.717938",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1142.3439024827198
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.724882",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1142.3439024827198
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.726418",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2284.6878049654397,
+          "true_final_ecosystem_value": 250495.4924743764
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 250000.0,
+        "end_value": 250992.7326975884,
+        "cp_change": -1314.8317642781185,
+        "income_change": 1158.7615808767478,
+        "model_change": 1148.802880989773,
+        "cash_change": 0.0,
+        "reconstructed_end": 250992.7326975884,
+        "component_sum": 250992.7326975884,
+        "concentrated_value": 148685.16823572188,
+        "income_value": 1158.7615808767478,
+        "model_value": 1148.802880989773,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 2,
+    "year_index": 0,
+    "month": 2,
+    "date": "Month 2",
+    "total_portfolio_value": 251988.97384267187,
+    "total_ecosystem_value": 251988.97384267187,
+    "cash": 100000.0,
+    "concentration_pct": 58.4787968236721,
+    "concentrated_value": 147360.1200315123,
+    "income_value": 2323.9614504357164,
+    "model_value": 2304.892360723839,
+    "shares": 976.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 976.0,
+        "value": 147360.1200315123,
+        "shares_sold": 12,
+        "price": 150.98372954048392
+      },
+      "income": {
+        "value": 2323.9614504357164,
+        "annual_income": 139.43768702614298,
+        "capital_allocated": 1143.1305548694625,
+        "income_generated_this_step": 11.257204858032923
+      },
+      "model": {
+        "value": 2304.892360723839,
+        "capital_allocated": 1143.1305548694625,
+        "growth_generated_this_step": 12.958924864603418
+      }
+    },
+    "capital_released_this_step": 2286.261109738925,
+    "allocation_to_income_this_step": 1143.1305548694625,
+    "allocation_to_model_this_step": 1143.1305548694625,
+    "total_return_index": 1.0079558953706875,
+    "income_generated_to_date": 38.486993083534344,
+    "model_growth_to_date": 19.41790337165685,
+    "income_generated_this_step": 11.257204858032923,
+    "cumulative_income_generated": 16.87021384107864,
+    "model_growth_this_step": 12.958924864603418,
+    "cp_price": 150.98372954048392,
+    "attr_income_allocated": 2285.474457352182,
+    "attr_income_generated": 16.87021384107864,
+    "attr_model_allocated": 2285.474457352182,
+    "attr_model_growth": 19.417903371656628,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 3605.892731607958,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.726458",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5924,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 29.62
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.726462",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 29.62,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.2519029150389117,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.726463",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 988.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.754510",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 12,
+          "cash_released_from_liquidation": 2286.261109738925
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.754515",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2286.261109738925,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1143.1305548694625,
+          "allocation_to_model": 1143.1305548694625
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.754516",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1143.1305548694625
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.757581",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1143.1305548694625
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.758906",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2286.261109738925,
+          "true_final_ecosystem_value": 251483.91318555086
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 250992.7326975884,
+        "end_value": 251988.97384267187,
+        "cp_change": -1325.0482042095682,
+        "income_change": 1165.1998695589687,
+        "model_change": 1156.089479734066,
+        "cash_change": 0.0,
+        "reconstructed_end": 251988.97384267187,
+        "component_sum": 251988.97384267187,
+        "concentrated_value": 147360.1200315123,
+        "income_value": 2323.9614504357164,
+        "model_value": 2304.892360723839,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 3,
+    "year_index": 0,
+    "month": 3,
+    "date": "Month 3",
+    "total_portfolio_value": 252988.72884634414,
+    "total_ecosystem_value": 252988.72884634414,
+    "cash": 100000.0,
+    "concentration_pct": 57.71988469718384,
+    "concentrated_value": 146024.80258698092,
+    "income_value": 3495.6237531077854,
+    "model_value": 3468.3025062554343,
+    "shares": 964.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 964.0,
+        "value": 146024.80258698092,
+        "shares_sold": 12,
+        "price": 151.47801098234535
+      },
+      "income": {
+        "value": 3495.6237531077854,
+        "annual_income": 209.7374251864671,
+        "capital_allocated": 1143.9101149218513,
+        "income_generated_this_step": 16.932704579915637
+      },
+      "model": {
+        "value": 3468.3025062554343,
+        "capital_allocated": 1143.9101149218513,
+        "growth_generated_this_step": 19.50003060974397
+      }
+    },
+    "capital_released_this_step": 2287.8202298437027,
+    "allocation_to_income_this_step": 1143.9101149218513,
+    "allocation_to_model_this_step": 1143.9101149218513,
+    "total_return_index": 1.0119549153853766,
+    "income_generated_to_date": 66.23918083375202,
+    "model_growth_to_date": 38.91793398140089,
+    "income_generated_this_step": 16.932704579915637,
+    "cumulative_income_generated": 33.802918420994274,
+    "model_growth_this_step": 19.50003060974397,
+    "cp_price": 151.47801098234535,
+    "attr_income_allocated": 3429.3845722740334,
+    "attr_income_generated": 33.802918420994274,
+    "attr_model_allocated": 3429.3845722740334,
+    "attr_model_growth": 38.917933981400594,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 5417.697486093765,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.758947",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5848,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 29.24
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.758952",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 29.24,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.2538030079408198,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.758953",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 976.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.786198",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 12,
+          "cash_released_from_liquidation": 2287.8202298437027
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.786202",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2287.8202298437027,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1143.9101149218513,
+          "allocation_to_model": 1143.9101149218513
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.786203",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1143.9101149218513
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.789207",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1143.9101149218513
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.790508",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2287.8202298437027,
+          "true_final_ecosystem_value": 252475.80880120007
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 251988.97384267187,
+        "end_value": 252988.72884634414,
+        "cp_change": -1335.3174445313925,
+        "income_change": 1171.662302672069,
+        "model_change": 1163.4101455315954,
+        "cash_change": 0.0,
+        "reconstructed_end": 252988.72884634414,
+        "component_sum": 252988.72884634414,
+        "concentrated_value": 146024.80258698092,
+        "income_value": 3495.6237531077854,
+        "model_value": 3468.3025062554343,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 4,
+    "year_index": 0,
+    "month": 4,
+    "date": "Month 4",
+    "total_portfolio_value": 253992.0030827931,
+    "total_ecosystem_value": 253992.0030827931,
+    "cash": 100000.0,
+    "concentration_pct": 56.962093731100914,
+    "concentrated_value": 144679.16286552133,
+    "income_value": 4673.77269519182,
+    "model_value": 4639.067522079939,
+    "shares": 952.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 952.0,
+        "value": 144679.16286552133,
+        "shares_sold": 12,
+        "price": 151.97391057302661
+      },
+      "income": {
+        "value": 4673.77269519182,
+        "annual_income": 280.42636171150923,
+        "capital_allocated": 1144.6825277721887,
+        "income_generated_this_step": 22.639625403334694
+      },
+      "model": {
+        "value": 4639.067522079939,
+        "capital_allocated": 1144.6825277721887,
+        "growth_generated_this_step": 26.082488052316844
+      }
+    },
+    "capital_released_this_step": 2289.3650555443774,
+    "allocation_to_income_this_step": 1144.6825277721887,
+    "allocation_to_model_this_step": 1144.6825277721887,
+    "total_return_index": 1.0159680123311723,
+    "income_generated_to_date": 99.70559514559773,
+    "model_growth_to_date": 65.00042203371686,
+    "income_generated_this_step": 22.639625403334694,
+    "cumulative_income_generated": 56.442543824328965,
+    "model_growth_this_step": 26.082488052316844,
+    "cp_price": 151.97391057302661,
+    "attr_income_allocated": 4574.067100046223,
+    "attr_income_generated": 56.442543824328965,
+    "attr_model_allocated": 4574.067100046223,
+    "attr_model_growth": 65.00042203371744,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 7235.433617881909,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.790549",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5772,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 28.86
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.790553",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 28.86,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.2557002882570404,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.790554",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 964.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.817647",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 12,
+          "cash_released_from_liquidation": 2289.3650555443774
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.817651",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2289.3650555443774,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1144.6825277721887,
+          "allocation_to_model": 1144.6825277721887
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.817652",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1144.6825277721887
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.820616",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1144.6825277721887
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.821907",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2289.3650555443774,
+          "true_final_ecosystem_value": 253471.1845590089
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": -2.9103830456733704e-11,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 252988.72884634414,
+        "end_value": 253992.0030827931,
+        "cp_change": -1345.6397214595927,
+        "income_change": 1178.1489420840348,
+        "model_change": 1170.765015824505,
+        "cash_change": 0.0,
+        "reconstructed_end": 253992.00308279306,
+        "component_sum": 253992.0030827931,
+        "concentrated_value": 144679.16286552133,
+        "income_value": 4673.77269519182,
+        "model_value": 4639.067522079939,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 5,
+    "year_index": 0,
+    "month": 5,
+    "date": "Month 5",
+    "total_portfolio_value": 254997.7776919137,
+    "total_ecosystem_value": 254997.7776919137,
+    "cash": 100000.0,
+    "concentration_pct": 56.26543898758456,
+    "concentrated_value": 143475.61902694023,
+    "income_value": 5781.35351092564,
+    "model_value": 5740.805154047836,
+    "shares": 941.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 941.0,
+        "value": 143475.61902694023,
+        "shares_sold": 11,
+        "price": 152.47143360992587
+      },
+      "income": {
+        "value": 5781.35351092564,
+        "annual_income": 346.8812106555384,
+        "capital_allocated": 1069.4607829829527,
+        "income_generated_this_step": 28.00471617848725
+      },
+      "model": {
+        "value": 5740.805154047836,
+        "capital_allocated": 1069.4607829829527,
+        "growth_generated_this_step": 32.2768489849438
+      }
+    },
+    "capital_released_this_step": 2138.9215659659053,
+    "allocation_to_income_this_step": 1069.4607829829527,
+    "allocation_to_model_this_step": 1069.4607829829527,
+    "total_return_index": 1.019991110767655,
+    "income_generated_to_date": 137.82562789646454,
+    "model_growth_to_date": 97.27727101866094,
+    "income_generated_this_step": 28.00471617848725,
+    "cumulative_income_generated": 84.44726000281622,
+    "model_growth_this_step": 32.2768489849438,
+    "cp_price": 152.47143360992587,
+    "attr_income_allocated": 5643.527883029175,
+    "attr_income_generated": 84.44726000281622,
+    "attr_model_allocated": 5643.527883029175,
+    "attr_model_growth": 97.27727101866124,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 8907.146634185203,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.821947",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5696,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 28.48
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.821952",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 28.48,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.2575947656722477,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.821953",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 952.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.848948",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 11,
+          "cash_released_from_liquidation": 2138.9215659659053
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.848955",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2138.9215659659053,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1069.4607829829527,
+          "allocation_to_model": 1069.4607829829527
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.848956",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1069.4607829829527
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.851925",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1069.4607829829527
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.853208",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2138.9215659659053,
+          "true_final_ecosystem_value": 254469.32694902807
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 253992.0030827931,
+        "end_value": 254997.7776919137,
+        "cp_change": -1203.5438385810994,
+        "income_change": 1107.5808157338197,
+        "model_change": 1101.737631967897,
+        "cash_change": 0.0,
+        "reconstructed_end": 254997.7776919137,
+        "component_sum": 254997.7776919137,
+        "concentrated_value": 143475.61902694023,
+        "income_value": 5781.35351092564,
+        "model_value": 5740.805154047836,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 6,
+    "year_index": 0,
+    "month": 6,
+    "date": "Month 6",
+    "total_portfolio_value": 256007.7780129573,
+    "total_ecosystem_value": 256007.7780129573,
+    "cash": 100000.0,
+    "concentration_pct": 55.56965711488593,
+    "concentrated_value": 142262.64442923872,
+    "income_value": 6895.347865719469,
+    "model_value": 6849.785717999139,
+    "shares": 930.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 930.0,
+        "value": 142262.64442923872,
+        "shares_sold": 11,
+        "price": 152.97058540778357
+      },
+      "income": {
+        "value": 6895.347865719469,
+        "annual_income": 413.7208719431681,
+        "capital_allocated": 1070.4686316932996,
+        "income_generated_this_step": 33.400873959097225
+      },
+      "model": {
+        "value": 6849.785717999139,
+        "capital_allocated": 1070.4686316932996,
+        "growth_generated_this_step": 38.5119322580027
+      }
+    },
+    "capital_released_this_step": 2140.937263386599,
+    "allocation_to_income_this_step": 1070.4686316932996,
+    "allocation_to_model_this_step": 1070.4686316932996,
+    "total_return_index": 1.0240311120518293,
+    "income_generated_to_date": 181.35135099699437,
+    "model_growth_to_date": 135.789203276664,
+    "income_generated_this_step": 33.400873959097225,
+    "cumulative_income_generated": 117.84813396191345,
+    "model_growth_this_step": 38.5119322580027,
+    "cp_price": 152.97058540778357,
+    "attr_income_allocated": 6713.996514722475,
+    "attr_income_generated": 117.84813396191345,
+    "attr_model_allocated": 6713.996514722475,
+    "attr_model_growth": 135.78920327666395,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 10584.332403894387,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.853247",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5627,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 28.13
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.853252",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 28.13,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.2593364025310386,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.853252",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 941.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.880266",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 11,
+          "cash_released_from_liquidation": 2140.937263386599
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.880270",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2140.937263386599,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1070.4686316932996,
+          "allocation_to_model": 1070.4686316932996
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.880271",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1070.4686316932996
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.883313",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1070.4686316932996
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.884629",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2140.937263386599,
+          "true_final_ecosystem_value": 255471.65403473255
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 2.9103830456733704e-11,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 254997.7776919137,
+        "end_value": 256007.7780129573,
+        "cp_change": -1212.9745977015118,
+        "income_change": 1113.9943547938292,
+        "model_change": 1108.9805639513024,
+        "cash_change": 0.0,
+        "reconstructed_end": 256007.77801295734,
+        "component_sum": 256007.7780129573,
+        "concentrated_value": 142262.64442923872,
+        "income_value": 6895.347865719469,
+        "model_value": 6849.785717999139,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 7,
+    "year_index": 0,
+    "month": 7,
+    "date": "Month 7",
+    "total_portfolio_value": 257021.00694576662,
+    "total_ecosystem_value": 257021.00694576662,
+    "cash": 100000.0,
+    "concentration_pct": 54.87496601914019,
+    "concentrated_value": 141040.1902235414,
+    "income_value": 8015.274564844523,
+    "model_value": 7965.542157380709,
+    "shares": 919.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 919.0,
+        "value": 141040.1902235414,
+        "shares_sold": 11,
+        "price": 153.47137129873929
+      },
+      "income": {
+        "value": 8015.274564844523,
+        "annual_income": 480.9164738906714,
+        "capital_allocated": 1070.971327468183,
+        "income_generated_this_step": 38.82576785123456
+      },
+      "model": {
+        "value": 7965.542157380709,
+        "capital_allocated": 1070.971327468183,
+        "growth_generated_this_step": 44.785111913386885
+      }
+    },
+    "capital_released_this_step": 2141.942654936366,
+    "allocation_to_income_this_step": 1070.971327468183,
+    "allocation_to_model_this_step": 1070.971327468183,
+    "total_return_index": 1.0280840277830665,
+    "income_generated_to_date": 230.30672265386602,
+    "model_growth_to_date": 180.5743151900515,
+    "income_generated_this_step": 38.82576785123456,
+    "cumulative_income_generated": 156.673901813148,
+    "model_growth_this_step": 44.785111913386885,
+    "cp_price": 153.47137129873929,
+    "attr_income_allocated": 7784.967842190657,
+    "attr_income_generated": 156.673901813148,
+    "attr_model_allocated": 7784.967842190657,
+    "attr_model_growth": 180.57431519005084,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 12267.008843380007,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.884672",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5557,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 27.78
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.884676",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 27.78,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.2610758572127852,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.884677",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 930.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.911771",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 11,
+          "cash_released_from_liquidation": 2141.942654936366
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.911776",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2141.942654936366,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1070.971327468183,
+          "allocation_to_model": 1070.971327468183
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.911777",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1070.971327468183
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.914840",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1070.971327468183
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.916138",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2141.942654936366,
+          "true_final_ecosystem_value": 256477.17383221374
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 256007.7780129573,
+        "end_value": 257021.00694576662,
+        "cp_change": -1222.454205697315,
+        "income_change": 1119.9266991250543,
+        "model_change": 1115.75643938157,
+        "cash_change": 0.0,
+        "reconstructed_end": 257021.00694576662,
+        "component_sum": 257021.00694576662,
+        "concentrated_value": 141040.1902235414,
+        "income_value": 8015.274564844523,
+        "model_value": 7965.542157380709,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 8,
+    "year_index": 0,
+    "month": 8,
+    "date": "Month 8",
+    "total_portfolio_value": 258038.47999146386,
+    "total_ecosystem_value": 258038.47999146386,
+    "cash": 100000.0,
+    "concentration_pct": 54.18114668278694,
+    "concentrated_value": 139808.20734220886,
+    "income_value": 9141.663326968679,
+    "model_value": 9088.609322286316,
+    "shares": 908.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 908.0,
+        "value": 139808.20734220886,
+        "shares_sold": 11,
+        "price": 153.9737966323886
+      },
+      "income": {
+        "value": 9141.663326968679,
+        "annual_income": 548.4997996181207,
+        "capital_allocated": 1071.9677698370003,
+        "income_generated_this_step": 44.28196379744545
+      },
+      "model": {
+        "value": 9088.609322286316,
+        "capital_allocated": 1071.9677698370003,
+        "growth_generated_this_step": 51.09939506860738
+      }
+    },
+    "capital_released_this_step": 2143.9355396740007,
+    "allocation_to_income_this_step": 1071.9677698370003,
+    "allocation_to_model_this_step": 1071.9677698370003,
+    "total_return_index": 1.0321539199658554,
+    "income_generated_to_date": 284.727714941022,
+    "model_growth_to_date": 231.6737102586594,
+    "income_generated_this_step": 44.28196379744545,
+    "cumulative_income_generated": 200.95586561059346,
+    "model_growth_this_step": 51.09939506860738,
+    "cp_price": 153.9737966323886,
+    "attr_income_allocated": 8856.935612027657,
+    "attr_income_generated": 200.95586561059346,
+    "attr_model_allocated": 8856.935612027657,
+    "attr_model_growth": 231.67371025865822,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 13955.19392766614,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.916177",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5487,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 27.44
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.916181",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 27.44,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.26281258495214954,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.916182",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 919.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.942843",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 11,
+          "cash_released_from_liquidation": 2143.9355396740007
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.942846",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2143.9355396740007,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1071.9677698370003,
+          "allocation_to_model": 1071.9677698370003
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.942847",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1071.9677698370003
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.945909",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1071.9677698370003
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.947198",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2143.9355396740007,
+          "true_final_ecosystem_value": 257486.89642964423
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": -2.9103830456733704e-11,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 257021.00694576662,
+        "end_value": 258038.47999146386,
+        "cp_change": -1231.982881332544,
+        "income_change": 1126.3887621241556,
+        "model_change": 1123.0671649056076,
+        "cash_change": 0.0,
+        "reconstructed_end": 258038.47999146383,
+        "component_sum": 258038.47999146386,
+        "concentrated_value": 139808.20734220886,
+        "income_value": 9141.663326968679,
+        "model_value": 9088.609322286316,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 9,
+    "year_index": 0,
+    "month": 9,
+    "date": "Month 9",
+    "total_portfolio_value": 259059.1934196923,
+    "total_ecosystem_value": 259059.1934196923,
+    "cash": 100000.0,
+    "concentration_pct": 53.488411149895754,
+    "concentrated_value": 138566.6464979287,
+    "income_value": 10274.029773223436,
+    "model_value": 10218.51714854015,
+    "shares": 897.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 897.0,
+        "value": 138566.6464979287,
+        "shares_sold": 11,
+        "price": 154.47786677584025
+      },
+      "income": {
+        "value": 10274.029773223436,
+        "annual_income": 616.4417863934061,
+        "capital_allocated": 1072.4556873981996,
+        "income_generated_this_step": 49.76711547991529
+      },
+      "model": {
+        "value": 10218.51714854015,
+        "capital_allocated": 1072.4556873981996,
+        "growth_generated_this_step": 57.45213885563283
+      }
+    },
+    "capital_released_this_step": 2144.9113747963993,
+    "allocation_to_income_this_step": 1072.4556873981996,
+    "allocation_to_model_this_step": 1072.4556873981996,
+    "total_return_index": 1.0362367736787692,
+    "income_generated_to_date": 344.6384737975786,
+    "model_growth_to_date": 289.1258491142926,
+    "income_generated_this_step": 49.76711547991529,
+    "cumulative_income_generated": 250.72298109050877,
+    "model_growth_this_step": 57.45213885563283,
+    "cp_price": 154.47786677584025,
+    "attr_income_allocated": 9929.391299425857,
+    "attr_income_generated": 250.72298109050877,
+    "attr_model_allocated": 9929.391299425857,
+    "attr_model_growth": 289.12584911429104,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 15648.905690622414,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.947240",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5418,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 27.09
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.947244",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 27.09,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.2645471332930327,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.947245",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 908.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.973581",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 11,
+          "cash_released_from_liquidation": 2144.9113747963993
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.973588",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2144.9113747963993,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1072.4556873981996,
+          "allocation_to_model": 1072.4556873981996
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.973589",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1072.4556873981996
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.976584",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1072.4556873981996
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.978167",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2144.9113747963993,
+          "true_final_ecosystem_value": 258499.8232466806
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": -2.9103830456733704e-11,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 258038.47999146386,
+        "end_value": 259059.1934196923,
+        "cp_change": -1241.5608442801458,
+        "income_change": 1132.3664462547567,
+        "model_change": 1129.9078262538333,
+        "cash_change": 0.0,
+        "reconstructed_end": 259059.19341969228,
+        "component_sum": 259059.1934196923,
+        "concentrated_value": 138566.6464979287,
+        "income_value": 10274.029773223436,
+        "model_value": 10218.51714854015,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 10,
+    "year_index": 0,
+    "month": 10,
+    "date": "Month 10",
+    "total_portfolio_value": 260084.16929980906,
+    "total_ecosystem_value": 260084.16929980906,
+    "cash": 100000.0,
+    "concentration_pct": 52.79654603833828,
+    "concentrated_value": 137315.45818280336,
+    "income_value": 11412.907067572125,
+    "model_value": 11355.804049433596,
+    "shares": 886.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 886.0,
+        "value": 137315.45818280336,
+        "shares_sold": 11,
+        "price": 154.98358711377355
+      },
+      "income": {
+        "value": 11412.907067572125,
+        "annual_income": 684.7744240543275,
+        "capital_allocated": 1073.440530467908,
+        "income_generated_this_step": 55.283805530105994
+      },
+      "model": {
+        "value": 11355.804049433596,
+        "capital_allocated": 1073.440530467908,
+        "growth_generated_this_step": 63.84637042553897
+      }
+    },
+    "capital_released_this_step": 2146.881060935816,
+    "allocation_to_income_this_step": 1073.440530467908,
+    "allocation_to_model_this_step": 1073.440530467908,
+    "total_return_index": 1.0403366771992362,
+    "income_generated_to_date": 410.0752376783603,
+    "model_growth_to_date": 352.9722195398317,
+    "income_generated_this_step": 55.283805530105994,
+    "cumulative_income_generated": 306.0067866206148,
+    "model_growth_this_step": 63.84637042553897,
+    "cp_price": 154.98358711377355,
+    "attr_income_allocated": 11002.831829893765,
+    "attr_income_generated": 306.0067866206148,
+    "attr_model_allocated": 11002.831829893765,
+    "attr_model_growth": 352.97221953983,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 17348.16222515666,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:31.978215",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5349,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 26.74
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.978219",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 26.74,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.26627897212526064,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:31.978220",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 897.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.009167",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 11,
+          "cash_released_from_liquidation": 2146.881060935816
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.009172",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 2146.881060935816,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 1073.440530467908,
+          "allocation_to_model": 1073.440530467908
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.009174",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 1073.440530467908
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.012373",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 1073.440530467908
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.013691",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 2146.881060935816,
+          "true_final_ecosystem_value": 259516.97090444455
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 2.9103830456733704e-11,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 259059.1934196923,
+        "end_value": 260084.16929980906,
+        "cp_change": -1251.188315125357,
+        "income_change": 1138.8772943486892,
+        "model_change": 1137.2869008934467,
+        "cash_change": 0.0,
+        "reconstructed_end": 260084.1692998091,
+        "component_sum": 260084.16929980906,
+        "concentrated_value": 137315.45818280336,
+        "income_value": 11412.907067572125,
+        "model_value": 11355.804049433596,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 11,
+    "year_index": 0,
+    "month": 11,
+    "date": "Month 11",
+    "total_portfolio_value": 261112.37664427163,
+    "total_ecosystem_value": 261112.37664427163,
+    "cash": 100000.0,
+    "concentration_pct": 52.16531111278925,
+    "concentrated_value": 136210.08363048235,
+    "income_value": 12479.716284081596,
+    "model_value": 12422.576729707675,
+    "shares": 876.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 876.0,
+        "value": 136210.08363048235,
+        "shares_sold": 10,
+        "price": 155.49096304849581
+      },
+      "income": {
+        "value": 12479.716284081596,
+        "annual_income": 748.7829770448958,
+        "capital_allocated": 996.928534313831,
+        "income_generated_this_step": 60.45139980858815
+      },
+      "model": {
+        "value": 12422.576729707675,
+        "capital_allocated": 996.928534313831,
+        "growth_generated_this_step": 69.84414596024635
+      }
+    },
+    "capital_released_this_step": 1993.857068627662,
+    "allocation_to_income_this_step": 996.928534313831,
+    "allocation_to_model_this_step": 996.928534313831,
+    "total_return_index": 1.0444495065770865,
+    "income_generated_to_date": 479.95591987400076,
+    "model_growth_to_date": 422.816365500079,
+    "income_generated_this_step": 60.45139980858815,
+    "cumulative_income_generated": 366.4581864292029,
+    "model_growth_this_step": 69.84414596024635,
+    "cp_price": 155.49096304849581,
+    "attr_income_allocated": 11999.760364207596,
+    "attr_income_generated": 366.4581864292029,
+    "attr_model_allocated": 11999.760364207596,
+    "attr_model_growth": 422.81636550007636,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 18897.998096294396,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:32.013738",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.528,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 26.4
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.013743",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 26.4,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.26800863490415433,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.013744",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 886.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.040430",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 10,
+          "cash_released_from_liquidation": 1993.857068627662
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.040434",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 1993.857068627662,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 996.928534313831,
+          "allocation_to_model": 996.928534313831
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.040435",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 996.928534313831
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.043380",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 996.928534313831
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.044806",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 1993.857068627662,
+          "true_final_ecosystem_value": 260537.61977968604
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": -5.820766091346741e-11,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 260084.16929980906,
+        "end_value": 261112.37664427163,
+        "cp_change": -1105.374552321009,
+        "income_change": 1066.8092165094713,
+        "model_change": 1066.772680274078,
+        "cash_change": 0.0,
+        "reconstructed_end": 261112.37664427157,
+        "component_sum": 261112.37664427163,
+        "concentrated_value": 136210.08363048235,
+        "income_value": 12479.716284081596,
+        "model_value": 12422.576729707675,
+        "cash": 100000.0
+      }
+    }
+  },
+  {
+    "step_index": 12,
+    "year_index": 1,
+    "month": 12,
+    "date": "Month 12",
+    "total_portfolio_value": 262144.5558257613,
+    "total_ecosystem_value": 262144.5558257613,
+    "cash": 100000.0,
+    "concentration_pct": 51.534924909824895,
+    "concentrated_value": 135096.0000000001,
+    "income_value": 13552.449631019641,
+    "model_value": 13496.106194741547,
+    "shares": 866.0,
+    "strategies": {
+      "concentrated": {
+        "shares": 866.0,
+        "value": 135096.0000000001,
+        "shares_sold": 10,
+        "price": 156.00000000000009
+      },
+      "income": {
+        "value": 13552.449631019641,
+        "annual_income": 813.1469778611785,
+        "capital_allocated": 997.6495544911363,
+        "income_generated_this_step": 65.64769041068087
+      },
+      "model": {
+        "value": 13496.106194741547,
+        "capital_allocated": 997.6495544911363,
+        "growth_generated_this_step": 75.87991054273772
+      }
+    },
+    "capital_released_this_step": 1995.2991089822726,
+    "allocation_to_income_this_step": 997.6495544911363,
+    "allocation_to_model_this_step": 997.6495544911363,
+    "total_return_index": 1.0485782233030452,
+    "income_generated_to_date": 555.0397123209095,
+    "model_growth_to_date": 498.69627604281595,
+    "income_generated_this_step": 65.64769041068087,
+    "cumulative_income_generated": 432.10587683988376,
+    "model_growth_this_step": 75.87991054273772,
+    "cp_price": 156.00000000000009,
+    "attr_income_allocated": 12997.409918698731,
+    "attr_income_generated": 432.10587683988376,
+    "attr_model_allocated": 12997.409918698731,
+    "attr_model_growth": 498.6962760428141,
+    "attr_cp_initial_value": 150000.0,
+    "attr_cp_value_sold": 20452.907726779355,
+    "decision_trace": [
+      {
+        "timestamp": "2026-03-19T15:11:32.044857",
+        "event": "EVALUATE_RISK_POSTURE",
+        "details": {
+          "concentration_pct": 0.5217,
+          "risk_score_input": 50.0,
+          "calculated_de_risk_score": 26.08
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.044862",
+        "event": "MAP_UNWIND_PARAMS",
+        "details": {
+          "de_risk_score": 26.08,
+          "mapped_params": {
+            "strategy_mode": "tax_neutral",
+            "enable_tax_loss_harvest": true,
+            "share_reduction_trigger_pct": 0.26958672221802693,
+            "max_shares_per_month": 200
+          }
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.044863",
+        "event": "INVOKE_CONCENTRATED_ENGINE",
+        "details": {
+          "action": "Start",
+          "initial_shares": 876.0
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.071379",
+        "event": "UNWIND_COMPLETE",
+        "details": {
+          "shares_sold": 10,
+          "cash_released_from_liquidation": 1995.2991089822726
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.071387",
+        "event": "SPLIT_RELEASED_CAPITAL",
+        "details": {
+          "released_cash": 1995.2991089822726,
+          "income_preference_pct": 50.0,
+          "allocation_to_income": 997.6495544911363,
+          "allocation_to_model": 997.6495544911363
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.071388",
+        "event": "INVOKE_INCOME_ENGINE",
+        "details": {
+          "capital_injected": 997.6495544911363
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.074340",
+        "event": "INVOKE_MODEL_PORTFOLIO_ENGINE",
+        "details": {
+          "capital_injected": 997.6495544911363
+        }
+      },
+      {
+        "timestamp": "2026-03-19T15:11:32.075592",
+        "event": "ORCHESTRATION_CYCLE_COMPLETE",
+        "details": {
+          "capital_released": 1995.2991089822726,
+          "true_final_ecosystem_value": 261562.20222480517
+        }
+      }
+    ],
+    "reconciliation": {
+      "flow_delta": 0.0,
+      "sum_delta": 0.0,
+      "is_flow_valid": true,
+      "is_sum_valid": true,
+      "details": {
+        "start_value": 261112.37664427163,
+        "end_value": 262144.5558257613,
+        "cp_change": -1114.0836304822587,
+        "income_change": 1072.7333469380446,
+        "model_change": 1073.5294650338728,
+        "cash_change": 0.0,
+        "reconstructed_end": 262144.5558257613,
+        "component_sum": 262144.5558257613,
+        "concentrated_value": 135096.0000000001,
+        "income_value": 13552.449631019641,
+        "model_value": 13496.106194741547,
+        "cash": 100000.0
+      }
+    }
+  }
+]
