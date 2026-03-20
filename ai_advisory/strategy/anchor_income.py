@@ -1,10 +1,11 @@
 import math
+import logging
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from dataclasses import dataclass
 from typing import Any, Dict
-import logging
+from ai_advisory.orchestration.trace_logger import trace_log
 
 @dataclass
 class TickerSimInfo:
@@ -185,10 +186,18 @@ def run_simulation(
         
         # --- 2. Yield Calculation (Monthly) ---
         if i % 30 == 0:
-            y_jepq: float = val_jepq * 0.105 / 12.0
-            y_tltw: float = val_tltw * 0.120 / 12.0
-            y_svol: float = val_svol * 0.160 / 12.0
-            monthly_inc: float = y_jepq + y_tltw + y_svol
+            MONTHLY_YIELDS = {'JEPQ': 0.0100, 'TLTW': 0.0150, 'SVOL': 0.0080}
+            
+            y_jepq = val_jepq * MONTHLY_YIELDS['JEPQ']
+            y_tltw = val_tltw * MONTHLY_YIELDS['TLTW']
+            y_svol = val_svol * MONTHLY_YIELDS['SVOL']
+            
+            cash_income = y_jepq + y_tltw + y_svol
+            monthly_inc = cash_income  # plug into existing behavior
+            
+            sleeve_value = val_jepq + val_tltw + val_svol
+            monthly_yield = cash_income / sleeve_value if sleeve_value > 0 else 0.0
+            annualized = monthly_yield * 12.0
         
             if monthly_inc > 0:
                 current_cumulative_income_val += monthly_inc
@@ -321,6 +330,21 @@ def run_simulation(
 
         cumulative_income_series[i] = current_cumulative_income_val
         withdrawn_income_series[i] = Total_Withdrawn
+    MONTHLY_YIELDS = {'JEPQ': 0.0100, 'TLTW': 0.0150, 'SVOL': 0.0080}
+    _sleeve_vals = {'JEPQ': val_jepq, 'TLTW': val_tltw, 'SVOL': val_svol}
+    cash_income_log = sum(
+        _sleeve_vals.get(ticker, 0) * yield_rate
+        for ticker, yield_rate in MONTHLY_YIELDS.items()
+        if ticker in _sleeve_vals
+    )
+    sleeve_value_log = sum(
+        _sleeve_vals.get(t, 0)
+        for t in _sleeve_vals
+        if t in _sleeve_vals
+    )
+    monthly_yield_log = cash_income_log / sleeve_value_log if sleeve_value_log > 0 else 0
+    annualized_log = monthly_yield_log * 12
+    trace_log(f"[INCOME YIELD] Cash Income: {cash_income_log:.2f} | Sleeve Value: {sleeve_value_log:.2f} | Monthly Yield: {monthly_yield_log:.2%} | Annualized: {annualized_log:.2%}")
 
     df_out = pd.DataFrame({
         "Date": dates.strftime("%Y-%m-%d"),

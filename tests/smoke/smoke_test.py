@@ -2,7 +2,7 @@ import os
 import sys
 import traceback
 from unittest.mock import patch
-from test_utils import mock_yf_download
+from tests.helpers.test_utils import mock_yf_download
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from ai_advisory.strategy.strategy_unwind import StrategyUnwindEngine
@@ -20,7 +20,8 @@ def run_smoke_test(mock_download):
 
         print("[1/2] Testing harvest mode...")
         harvest_results = engine.run_covered_call_overlay(
-            strategy_mode="harvest",
+            enable_unwind=False,
+            enable_tlh=True,
             enable_tax_loss_harvest=True,
             share_reduction_trigger_pct=0.3,
             cost_basis=100.0,
@@ -34,9 +35,10 @@ def run_smoke_test(mock_download):
         assert harvest_results is not None
         assert "summary" in harvest_results
         
-        print("[2/2] Testing tax_neutral mode...")
+        # 1.2 "tax_neutral" -> CP mode generates cash
         tn_results = engine.run_covered_call_overlay(
-            strategy_mode="tax_neutral",
+            enable_unwind=True,
+            enable_tlh=False,
             enable_tax_loss_harvest=True,
             share_reduction_trigger_pct=0.3,
             cost_basis=100.0,

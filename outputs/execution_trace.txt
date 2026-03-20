@@ -1,0 +1,2211 @@
+--- NEW SIMULATION RUN ---
+
+==================================================
+--- [MODULE 1] TRACE START: /api/portfolio/simulate ---
+INPUT RECEIVED: {'total_portfolio_value': 1250000.0, 'cash': 50000.0, 'concentrated_position_value': 1200000.0, 'income_portfolio_value': 0.0, 'model_portfolio_value': 0.0, 'tlh_inventory': 250000.0, 'risk_score': 27.0, 'income_preference': 56.0, 'ticker': 'AAPL', 'start_date': '2023-01-01', 'end_date': '2023-10-01', 'initial_shares': 10000.0, 'unwind_cost_basis': 150.0, 'horizon_months': 36}
+==================================================
+
+Warning: yfinance fetch failed, using mock 100.0 prices: cannot assign to field 'current_price'
+
+--- [MODULE 2] START MONTH 1 ---
+CURRENT STATE - Cash: 50000.00, CP: 1200000.00, Income: 0.00, Model: 0.00
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 1
+Requested: 4521.91
+Available: 54521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144062, 'TLTW': 5.0645414226125895, 'SVOL': 2.5322707113062948, 'VTI': 5.372031437556925, 'TLT': 14.524381294135388}
+[PRICE SOURCE]
+Month: 1
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 1
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 1
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 1
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 1
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 1
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 2532.27
+Model growth: 0.00 -> New Model Value: 1989.64
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 1
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1004521.91
+Reported Value: 1004521.91
+
+[LEDGER]
+Month: 1
+Events Recorded: 437
+
+--- [MODULE 2] START MONTH 2 ---
+CURRENT STATE - Cash: 45478.09, CP: 1000000.00, Income: 2532.27, Model: 1989.64
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 2
+Requested: 4521.91
+Available: 50000.00
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144076, 'TLTW': 5.064541422612595, 'SVOL': 2.5322707113062974, 'VTI': 5.372031437556928, 'TLT': 14.524381294135399}
+[PRICE SOURCE]
+Month: 2
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 2
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 2
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 2
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 2
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 2
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -0.00 -> New Income Value: 5064.54
+Model growth: 0.00 -> New Model Value: 3979.28
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 2
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1009043.82
+Reported Value: 1009043.82
+
+[LEDGER]
+Month: 2
+Events Recorded: 442
+
+--- [MODULE 2] START MONTH 3 ---
+CURRENT STATE - Cash: 40956.18, CP: 1000000.00, Income: 5064.54, Model: 3979.28
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 3
+Requested: 4521.91
+Available: 45478.09
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144076, 'TLTW': 5.064541422612595, 'SVOL': 2.5322707113062974, 'VTI': 5.372031437556928, 'TLT': 14.524381294135399}
+[PRICE SOURCE]
+Month: 3
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 3
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 3
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 3
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 3
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 3
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 7596.81
+Model growth: 0.00 -> New Model Value: 5968.92
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 3
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1013565.74
+Reported Value: 1013565.74
+
+[LEDGER]
+Month: 3
+Events Recorded: 447
+
+--- [MODULE 2] START MONTH 4 ---
+CURRENT STATE - Cash: 36434.26, CP: 1000000.00, Income: 7596.81, Model: 5968.92
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 4
+Requested: 4521.91
+Available: 40956.18
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144076, 'TLTW': 5.064541422612595, 'SVOL': 2.5322707113062974, 'VTI': 5.372031437556928, 'TLT': 14.524381294135399}
+[PRICE SOURCE]
+Month: 4
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 4
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 4
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 4
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 4
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 4
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -0.00 -> New Income Value: 10129.08
+Model growth: 0.00 -> New Model Value: 7958.57
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 4
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1018087.65
+Reported Value: 1018087.65
+
+[LEDGER]
+Month: 4
+Events Recorded: 452
+
+--- [MODULE 2] START MONTH 5 ---
+CURRENT STATE - Cash: 31912.35, CP: 1000000.00, Income: 10129.08, Model: 7958.57
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 5
+Requested: 4521.91
+Available: 36434.26
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144034, 'TLTW': 5.064541422612582, 'SVOL': 2.532270711306291, 'VTI': 5.372031437556916, 'TLT': 14.524381294135365}
+[PRICE SOURCE]
+Month: 5
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 5
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 5
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 5
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 5
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 5
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 12661.35
+Model growth: 0.00 -> New Model Value: 9948.21
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 5
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1022609.56
+Reported Value: 1022609.56
+
+[LEDGER]
+Month: 5
+Events Recorded: 457
+
+--- [MODULE 2] START MONTH 6 ---
+CURRENT STATE - Cash: 27390.44, CP: 1000000.00, Income: 12661.35, Model: 9948.21
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 6
+Requested: 4521.91
+Available: 31912.35
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144062, 'TLTW': 5.0645414226125895, 'SVOL': 2.5322707113062948, 'VTI': 5.372031437556925, 'TLT': 14.524381294135388}
+[PRICE SOURCE]
+Month: 6
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 6
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 6
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 6
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 6
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 6
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -0.00 -> New Income Value: 15193.62
+Model growth: 0.00 -> New Model Value: 11937.85
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 6
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1027131.47
+Reported Value: 1027131.47
+
+[LEDGER]
+Month: 6
+Events Recorded: 462
+
+--- [MODULE 2] START MONTH 7 ---
+CURRENT STATE - Cash: 22868.53, CP: 1000000.00, Income: 15193.62, Model: 11937.85
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 7
+Requested: 4521.91
+Available: 27390.44
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144062, 'TLTW': 5.0645414226125895, 'SVOL': 2.5322707113062948, 'VTI': 5.372031437556925, 'TLT': 14.524381294135388}
+[PRICE SOURCE]
+Month: 7
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 7
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 7
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 7
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 7
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 7
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 17725.89
+Model growth: 0.00 -> New Model Value: 13927.49
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 7
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1031653.38
+Reported Value: 1031653.38
+
+[LEDGER]
+Month: 7
+Events Recorded: 467
+
+--- [MODULE 2] START MONTH 8 ---
+CURRENT STATE - Cash: 18346.62, CP: 1000000.00, Income: 17725.89, Model: 13927.49
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 8
+Requested: 4521.91
+Available: 22868.53
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144062, 'TLTW': 5.0645414226125895, 'SVOL': 2.5322707113062948, 'VTI': 5.372031437556925, 'TLT': 14.524381294135388}
+[PRICE SOURCE]
+Month: 8
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 8
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 8
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 8
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 8
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 8
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 20258.17
+Model growth: 0.00 -> New Model Value: 15917.13
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 8
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1036175.30
+Reported Value: 1036175.30
+
+[LEDGER]
+Month: 8
+Events Recorded: 472
+
+--- [MODULE 2] START MONTH 9 ---
+CURRENT STATE - Cash: 13824.70, CP: 1000000.00, Income: 20258.17, Model: 15917.13
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 9
+Requested: 4521.91
+Available: 18346.62
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144062, 'TLTW': 5.0645414226125895, 'SVOL': 2.5322707113062948, 'VTI': 5.372031437556925, 'TLT': 14.524381294135388}
+[PRICE SOURCE]
+Month: 9
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 9
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 9
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 9
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 9
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 9
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 22790.44
+Model growth: 0.00 -> New Model Value: 17906.77
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 9
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1040697.21
+Reported Value: 1040697.21
+
+[LEDGER]
+Month: 9
+Events Recorded: 477
+
+--- [MODULE 2] START MONTH 10 ---
+CURRENT STATE - Cash: 9302.79, CP: 1000000.00, Income: 22790.44, Model: 17906.77
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 10
+Requested: 4521.91
+Available: 13824.70
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144062, 'TLTW': 5.0645414226125895, 'SVOL': 2.5322707113062948, 'VTI': 5.372031437556925, 'TLT': 14.524381294135388}
+[PRICE SOURCE]
+Month: 10
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 10
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 10
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 10
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 10
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 10
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 25322.71
+Model growth: 0.00 -> New Model Value: 19896.41
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 10
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1045219.12
+Reported Value: 1045219.12
+
+[LEDGER]
+Month: 10
+Events Recorded: 482
+
+--- [MODULE 2] START MONTH 11 ---
+CURRENT STATE - Cash: 4780.88, CP: 1000000.00, Income: 25322.71, Model: 19896.41
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 11
+Requested: 4521.91
+Available: 9302.79
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -4,521.91
+Positions Updated: {'JEPQ': 17.725894979144062, 'TLTW': 5.0645414226125895, 'SVOL': 2.5322707113062948, 'VTI': 5.372031437556925, 'TLT': 14.524381294135388}
+[PRICE SOURCE]
+Month: 11
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 11
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 11
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 11
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 11
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 11
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: 0.00 -> New Income Value: 27854.98
+Model growth: 0.00 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: -4521.91
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 11
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1049741.03
+Reported Value: 1049741.03
+
+[LEDGER]
+Month: 11
+Events Recorded: 487
+
+--- [MODULE 2] START MONTH 12 ---
+CURRENT STATE - Cash: 258.97, CP: 1000000.00, Income: 27854.98, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 12
+Requested: 4521.91
+Available: 4780.88
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: -258.97
+Positions Updated: {'JEPQ': 2.589681707692107, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 12
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 12
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 12
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 12
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 12
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 12
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2273.30 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: -258.97
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 12
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 12
+Events Recorded: 492
+
+--- [MODULE 2] START MONTH 13 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 13
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 13
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 13
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 13
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 13
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 13
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 13
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 13
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 13
+Events Recorded: 497
+
+--- [MODULE 2] START MONTH 14 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 14
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 14
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 14
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 14
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 14
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 14
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 14
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 14
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 14
+Events Recorded: 502
+
+--- [MODULE 2] START MONTH 15 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 15
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 15
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 15
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 15
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 15
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 15
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 15
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 15
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 15
+Events Recorded: 507
+
+--- [MODULE 2] START MONTH 16 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 16
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 16
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 16
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 16
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 16
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 16
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 16
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 16
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 16
+Events Recorded: 512
+
+--- [MODULE 2] START MONTH 17 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 17
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 17
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 17
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 17
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 17
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 17
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 17
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 17
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 17
+Events Recorded: 517
+
+--- [MODULE 2] START MONTH 18 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 18
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 18
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 18
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 18
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 18
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 18
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 18
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 18
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 18
+Events Recorded: 522
+
+--- [MODULE 2] START MONTH 19 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 19
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 19
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 19
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 19
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 19
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 19
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 19
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 19
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 19
+Events Recorded: 527
+
+--- [MODULE 2] START MONTH 20 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 20
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 20
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 20
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 20
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 20
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 20
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 20
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 20
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 20
+Events Recorded: 532
+
+--- [MODULE 2] START MONTH 21 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 21
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 21
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 21
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 21
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 21
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 21
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 21
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 21
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 21
+Events Recorded: 537
+
+--- [MODULE 2] START MONTH 22 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 22
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 22
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 22
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 22
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 22
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 22
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 22
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 22
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 22
+Events Recorded: 542
+
+--- [MODULE 2] START MONTH 23 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 23
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 23
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 23
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 23
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 23
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 23
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 23
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 23
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 23
+Events Recorded: 547
+
+--- [MODULE 2] START MONTH 24 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 24
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 24
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 24
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 24
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 24
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 24
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 24
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 24
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 24
+Events Recorded: 552
+
+--- [MODULE 2] START MONTH 25 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 25
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 25
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 25
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 25
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 25
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 25
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 25
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 25
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 25
+Events Recorded: 557
+
+--- [MODULE 2] START MONTH 26 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 26
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 26
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 26
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 26
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 26
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 26
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 26
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 26
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 26
+Events Recorded: 562
+
+--- [MODULE 2] START MONTH 27 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 27
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 27
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 27
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 27
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 27
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 27
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 27
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 27
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 27
+Events Recorded: 567
+
+--- [MODULE 2] START MONTH 28 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 28
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 28
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 28
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 28
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 28
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 28
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 28
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 28
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 28
+Events Recorded: 572
+
+--- [MODULE 2] START MONTH 29 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 29
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 29
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 29
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 29
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 29
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 29
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 29
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 29
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 29
+Events Recorded: 577
+
+--- [MODULE 2] START MONTH 30 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 30
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 30
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 30
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 30
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 30
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 30
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 30
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 30
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 30
+Events Recorded: 582
+
+--- [MODULE 2] START MONTH 31 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 31
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 31
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 31
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 31
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 31
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 31
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 31
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 31
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 31
+Events Recorded: 587
+
+--- [MODULE 2] START MONTH 32 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 32
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 32
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 32
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 32
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 32
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 32
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 32
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 32
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 32
+Events Recorded: 592
+
+--- [MODULE 2] START MONTH 33 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 33
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 33
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 33
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 33
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 33
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 33
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 33
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 33
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 33
+Events Recorded: 597
+
+--- [MODULE 2] START MONTH 34 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 34
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 34
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 34
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 34
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 34
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 34
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 34
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 34
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 34
+Events Recorded: 602
+
+--- [MODULE 2] START MONTH 35 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 35
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 35
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 35
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 35
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 35
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 35
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 35
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 35
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 35
+Events Recorded: 607
+
+--- [MODULE 2] START MONTH 36 ---
+CURRENT STATE - Cash: 0.00, CP: 1000000.00, Income: 28113.95, Model: 21886.05
+--- [MODULE 4] LEDGER/EVENT TRACE: EVALUATE_RISK_POSTURE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: MAP_UNWIND_PARAMS ---
+--- [MODULE 3] STRATEGY CALL TRACE ---
+-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_CONCENTRATED_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: UNWIND_COMPLETE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: SPLIT_RELEASED_CAPITAL ---
+[CAPITAL CONSTRAINT]
+Month: 36
+Requested: 4521.91
+Available: 4521.91
+Scale Factor: 1.0000
+-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_INCOME_ENGINE ---
+-> CALLED: Model Strategy Engine (run_mp_backtest)
+--- [MODULE 4] LEDGER/EVENT TRACE: INVOKE_MODEL_PORTFOLIO_ENGINE ---
+--- [MODULE 4] LEDGER/EVENT TRACE: ORCHESTRATION_CYCLE_COMPLETE ---
+ledger.apply calls implicitly made via PortfolioState.apply_changes
+
+--- [EXECUTION LAYER] ---
+Trades Executed: 5
+Cash Δ: 0.00
+Positions Updated: {'JEPQ': 0.0, 'TLTW': 0.0, 'SVOL': 0.0, 'VTI': 0.0, 'TLT': 0.0}
+[PRICE SOURCE]
+Month: 36
+Symbol: AAPL price: 100.0
+[PRICE SOURCE]
+Month: 36
+Symbol: JEPQ price: 100.0
+[PRICE SOURCE]
+Month: 36
+Symbol: TLTW price: 100.0
+[PRICE SOURCE]
+Month: 36
+Symbol: SVOL price: 100.0
+[PRICE SOURCE]
+Month: 36
+Symbol: VTI price: 100.0
+[PRICE SOURCE]
+Month: 36
+Symbol: TLT price: 100.0
+--- [MODULE 5] STATE MUTATION TRACE ---
+Income generated: -2532.27 -> New Income Value: 28113.95
+Model growth: -1989.64 -> New Model Value: 21886.05
+New CP Value: 1000000.00
+Cash Delta: 0.00
+Shares Delta: 0.0000
+
+[STATE CHECK]
+Month: 36
+Holdings: {**new_state.income_holdings, **new_state.model_holdings}
+Prices: {'JEPQ': 100.0, 'TLTW': 100.0, 'SVOL': 100.0, 'VTI': 100.0, 'TLT': 100.0}
+Computed Value: 1050000.00
+Reported Value: 1050000.00
+
+[LEDGER]
+Month: 36
+Events Recorded: 612
+
+==================================================
+--- [MODULE 6] OUTPUT TRACE ---
+Final step values: {'total_capital_released': 162788.83144111888, 'total_allocated_income': 91161.74560702658, 'total_allocated_model': 71627.08583409232, 'final_state': {'step_index': 36, 'year_index': 3, 'month': 36, 'date': 'Month 36', 'total_portfolio_value': 1050000.0, 'total_ecosystem_value': 1050000.0, 'cash': 0.0, 'concentration_pct': 95.23809523809523, 'concentrated_value': 1000000.0, 'income_value': 28113.945995138456, 'model_value': 21886.05400486155, 'shares': 10000.0, 'strategies': {'concentrated': {'shares': 10000.0, 'value': 1000000.0, 'shares_sold': 0, 'price': 100.0}, 'income': {'value': 28113.945995138456, 'annual_income': 1686.8367597083072, 'capital_allocated': 2532.270711306293, 'income_generated_this_step': -2532.2707113062934, 'holdings': {'JEPQ': 197.57452647827682, 'TLTW': 55.70995564873851, 'SVOL': 27.854977824369254}}, 'model': {'value': 21886.05400486155, 'capital_allocated': 1989.6412731692296, 'growth_generated_this_step': -1989.641273169229, 'holdings': {'VTI': 59.09234581312619, 'TLT': 159.76819423548932}}}, 'capital_released_this_step': 4521.911984475522, 'allocation_to_income_this_step': 2532.270711306293, 'allocation_to_model_this_step': 1989.6412731692296, 'total_return_index': 0.84, 'income_generated_to_date': -63047.79961188812, 'model_growth_to_date': -49741.031829230764, 'income_generated_this_step': -2532.2707113062934, 'cumulative_income_generated': -63047.79961188811, 'model_growth_this_step': -1989.641273169229, 'cp_price': 100.0, 'attr_income_allocated': 91161.74560702658, 'attr_income_generated': -63047.79961188811, 'attr_model_allocated': 71627.08583409232, 'attr_model_growth': -49741.03182923069, 'attr_cp_initial_value': 1200000.0, 'attr_cp_value_sold': 0.0, 'decision_trace': [], 'reconciliation': {'flow_delta': 0.0, 'sum_delta': 0.0, 'is_flow_valid': True, 'is_sum_valid': True, 'details': {'start_value': 1050000.0, 'end_value': 1050000.0, 'cp_change': 0.0, 'income_change': 0.0, 'model_change': 0.0, 'cash_change': 0.0, 'reconstructed_end': 1050000.0, 'component_sum': 1050000.0, 'concentrated_value': 1000000.0, 'income_value': 28113.945995138456, 'model_value': 21886.05400486155, 'cash': 0.0}}}}
+Reconciliation: {'flow_delta': 0.0, 'sum_delta': 0.0, 'is_flow_valid': True, 'is_sum_valid': True, 'details': {'start_value': 1050000.0, 'end_value': 1050000.0, 'cp_change': 0.0, 'income_change': 0.0, 'model_change': 0.0, 'cash_change': 0.0, 'reconstructed_end': 1050000.0, 'component_sum': 1050000.0, 'concentrated_value': 1000000.0, 'income_value': 28113.945995138456, 'model_value': 21886.05400486155, 'cash': 0.0}}
+==================================================
+

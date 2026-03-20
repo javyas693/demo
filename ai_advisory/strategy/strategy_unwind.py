@@ -361,45 +361,40 @@ class StrategyUnwindEngine:
 
     def run_covered_call_overlay(
         self,
-        # Legacy params (kept for UI compatibility; v1 does NOT use moneyness/roll-frequency)
-        call_moneyness_pct: float = 5.0,
-        dte_days: int = 45,
-        roll_frequency_days: int = 30,
-        coverage_pct: float = 50.0,
-        enable_tax_loss_harvest: bool = True,  # kept for UI toggle; TLH is tracked, not converted to tax dollars
-        position_reduction_pct_per_quarter: float = 0.0,
-        reduction_threshold_pct: Optional[float] = None,
-
-        # NEW: share-reduction trigger percent (X% above basis)
+        enable_covered_call: bool = True,
+        enable_tlh: bool = True,
+        enable_unwind: bool = True,
         share_reduction_trigger_pct: float = 0.3,
-
-        # Single-lot basis for MVP (if None, defaults to initial price)
         cost_basis: Optional[float] = None,
-
-        # ---- v1 deterministic overlay params ----
+        coverage_pct: float = 50.0,
         target_dte_days: int = 30,
         target_delta: float = 0.20,
         profit_capture_pct: float = 0.50,
+        max_shares_per_month: int = 200,
+        starting_cash: float = 0.0,
+        initial_state=None,
+        tlh_manager=None,
+        # Default legacy fallback
         stop_loss_multiple: float = 1.00,
         extrinsic_threshold_pct: float = 0.05,
-
-        # Reporting counters (v1)
-        total_realized_option_loss=0.0,
-        total_shares_sold_on_call_loss = 0,
-
-        total_realized_option_pnl = 0.0,
-        audit_log: list[str] = [],
-        strategy_mode: str = "harvest",
-        cash_return_mode: str = "underlying",  # v1: cash grows at underlying return
-        starting_cash: float = 0.0,
-        max_shares_per_month: int = 200,
+        roll_threshold: float = 0.03,
+        position_reduction_pct_per_quarter: float = 0.0,
+        reduction_threshold_pct: Optional[float] = None,
         wash_sale_cooldown_days: int = 0,
+        cash_return_mode: str = "underlying"
     ) -> Dict[str, Any]:
         runner = StrategyRunner()
-        # map strategy_mode -> StrategyRunner key
-        strategy_key = "tax_neutral" if strategy_mode == "tax_neutral" else "harvest"
+        # execution key depends on overlays: if unwind is explicitly active, use tax_neutral, else harvest (TLH)
+        strategy_key = "tax_neutral" if enable_unwind else "harvest"
         
         df = self.price_data.copy()
+
+        # Override entire price series with current simulation price
+        if initial_state is not None and getattr(initial_state, 'current_price', 0.0) > 0.0:
+            live_price = float(initial_state.current_price)
+            # Keep only one row to prevent stale daily prices from driving decisions
+            df = df.iloc[[-1]].copy()
+            df["Price"] = live_price
 
         # Initialize columns
         df["Shares"] = 0.0
@@ -427,8 +422,27 @@ class StrategyUnwindEngine:
         initial_value = initial_price * float(self.initial_shares)
 
         basis = float(cost_basis) if cost_basis is not None else initial_price
-        state = self._init_overlay_state(cost_basis=basis)
-        state.cash = starting_cash
+        
+        # --- DELTAS ---
+        shares_delta = 0.0
+        cash_delta = 0.0
+        tlh_delta = 0.0
+        tlh_used = 0.0
+        option_pnl = 0.0
+        realized_stock_gain = 0.0
+        cumulative_taxes = 0.0
+        
+        # --- LOCALS ---
+        current_shares = float(initial_state.shares) if initial_state is not None else float(self.initial_shares)
+        current_cash = float(initial_state.cash) if initial_state is not None else starting_cash
+        initial_basis_val = float(initial_state.cost_basis) if initial_state is not None else basis
+        current_tlh_inventory = float(initial_state.tlh_inventory) if initial_state is not None else 0.0
+        
+        open_option = getattr(initial_state, 'open_option', None) if initial_state is not None else None
+        next_call_allowed_date = getattr(initial_state, 'next_call_allowed_date', None) if initial_state is not None else None
+
+        # Removed state initialization
+        # Removed current_cash = starting_cash
 
         # Volatility (deterministic)
         volatility = self.estimate_volatility()
@@ -460,7 +474,7 @@ class StrategyUnwindEngine:
         # Audit log initialization
         audit_log = [
             f"{df.index[0].date()} | INITIALIZE | CONCENTRATED START\n"
-            f"Basis: ${state.cost_basis:,.2f} | Cash: ${state.cash:,.2f} | Shares: {int(state.shares)}"
+            f"Basis: ${initial_basis_val:,.2f} | Cash: ${starting_cash:,.2f} | Shares: {int(self.initial_shares)}"
         ]
         
         # Monthly sale tracking
@@ -471,7 +485,7 @@ class StrategyUnwindEngine:
             exit_reason = ""
             
             # Stop simulation if no shares left
-            if state.shares <= 0:
+            if (current_shares + shares_delta) <= 0:
                 break
 
             # ==========================================================
@@ -498,21 +512,21 @@ class StrategyUnwindEngine:
             if position_reduction_pct_per_quarter > 0:
                 days_since = (date - last_reduction_date).days
                 if days_since >= 90:
-                    reduction_amount = int(state.shares * (position_reduction_pct_per_quarter / 100.0))
-                    reduction_amount = min(reduction_amount, int(state.shares))
+                    reduction_amount = int((current_shares + shares_delta) * (position_reduction_pct_per_quarter / 100.0))
+                    reduction_amount = min(reduction_amount, int(current_shares + shares_delta))
                     if reduction_amount > 0:
-                        state.cash += reduction_amount * current_price
-                        state.shares = max(0.0, state.shares - reduction_amount)
+                        cash_delta += reduction_amount * current_price
+                        current_shares = max(0.0, (current_shares + shares_delta) - reduction_amount)
                         last_reduction_date = date
 
             if reduction_threshold_pct is not None and not reduction_triggered:
                 gain_pct = (current_price / initial_price - 1.0) * 100.0
                 if gain_pct >= float(reduction_threshold_pct):
-                    reduction_amount = int(state.shares * 0.25)
-                    reduction_amount = min(reduction_amount, int(state.shares))
+                    reduction_amount = int((current_shares + shares_delta) * 0.25)
+                    reduction_amount = min(reduction_amount, int(current_shares + shares_delta))
                     if reduction_amount > 0:
-                        state.cash += reduction_amount * current_price
-                        state.shares = max(0.0, state.shares - reduction_amount)
+                        cash_delta += reduction_amount * current_price
+                        current_shares = max(0.0, (current_shares + shares_delta) - reduction_amount)
                         reduction_triggered = True
 
             # -----------------------------
@@ -522,22 +536,22 @@ class StrategyUnwindEngine:
             intrinsic = 0.0
             extrinsic = 0.0
 
-            if state.open_option is not None and state.open_option.covered_shares > 0:
-                days_open = (date - state.open_option.open_date).days
+            if open_option is not None and open_option.covered_shares > 0:
+                days_open = (date - open_option.open_date).days
                 dte_remaining = int(target_dte_days) - int(days_open)
                 T = max(dte_remaining, 0) / 365.0
 
                 option_mark = self.black_scholes_call(
-                    current_price, state.open_option.strike, T, self.risk_free_rate, volatility
+                    current_price, open_option.strike, T, self.risk_free_rate, volatility
                 )
 
-                intrinsic = max(current_price - state.open_option.strike, 0.0)
+                intrinsic = max(current_price - open_option.strike, 0.0)
                 extrinsic = max(option_mark - intrinsic, 0.0)
 
                 exit_reason = self._evaluate_exit_reason(
                     intrinsic=intrinsic,
                     extrinsic=extrinsic,
-                    premium_open_per_share=state.open_option.premium_open_per_share,
+                    premium_open_per_share=open_option.premium_open_per_share,
                     option_mark=option_mark,
                     dte_remaining=dte_remaining,
                     profit_capture_pct=profit_capture_pct,
@@ -548,19 +562,19 @@ class StrategyUnwindEngine:
                 if exit_reason:
                     # Expiration uses intrinsic as settlement/close value
                     close_per_share = intrinsic if exit_reason == "EXPIRE" else option_mark
-                    close_cost_total = close_per_share * float(state.open_option.covered_shares)
+                    close_cost_total = close_per_share * float(open_option.covered_shares)
 
                     # Cash accounting (v1)
-                    state.cash -= close_cost_total
+                    cash_delta -= close_cost_total
 
                     # Realized option PnL for THIS trade (signed)
-                    realized_option_pnl = state.open_option.premium_open_total - close_cost_total
-                    option_premium_collected += state.open_option.premium_open_total
+                    realized_option_pnl = open_option.premium_open_total - close_cost_total
+                    option_premium_collected += open_option.premium_open_total
                     option_buyback_cost += close_cost_total
 
                     # Reporting totals
                     total_realized_option_pnl += realized_option_pnl
-                    state.realized_option_pnl += realized_option_pnl
+                    option_pnl += realized_option_pnl
                     
                     # Phase 2: Yearly Tax Ledger update
                     year = date.year
@@ -592,15 +606,16 @@ class StrategyUnwindEngine:
                         yearly_tax_ledger[year]["tlh_generated"] = yearly_tax_ledger[year]["option_losses"]
                         
                         # GLOBAL TLH INVENTORY ACCUMULATION
-                        state.total_tlh_generated += loss_amt
-                        state.tlh_inventory += loss_amt
+                        tlh_delta += loss_amt
+                        if tlh_manager:
+                            tlh_manager.add_tlh(loss_amt, "covered_call_loss_offset")
 
                         # TLH INVENTORY TRACE
-                        print(f"[{date.date()}] TLH UPDATE | generated={loss_amt:,.0f} | inventory={state.tlh_inventory:,.0f}")
+                        print(f"[{date.date()}] TLH UPDATE | generated={loss_amt:,.0f} | inventory={(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f}")
                         
                         # Wash Sale Cooldown
                         if wash_sale_cooldown_days > 0:
-                            state.next_call_allowed_date = pd.Timestamp(date) + pd.Timedelta(days=wash_sale_cooldown_days)
+                            next_call_allowed_date = pd.Timestamp(date) + pd.Timedelta(days=wash_sale_cooldown_days)
 
                         current_strategy_key = strategy_key
                         
@@ -613,31 +628,33 @@ class StrategyUnwindEngine:
                             mode_label = "HARVEST_MODE" if current_strategy_key == "harvest" else "PREMIUM_COLLECTION"
                             strat_log_prefix = "HARVEST_MODE" if current_strategy_key == "harvest" else "TAX_NEUTRAL_MODE"
                             
-                            gain_per_share = current_price - state.cost_basis
-                            if gain_per_share <= 0 or state.tlh_inventory <= 0:  # Gain <= 0 or no TLH
+                            gain_per_share = current_price - initial_basis_val
+                            if gain_per_share <= 0 or (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) <= 0:  # Gain <= 0 or no TLH
                                 shares_required = 0
                                 reason = "no_gain_available" if gain_per_share <= 0 else "no_tlh_available"
                             else:
-                                shares_required = int(floor(state.tlh_inventory / gain_per_share))
-                                
                                 remaining_monthly_capacity = max_shares_per_month - shares_sold_this_month
+                                shares_candidate = min(max(0, remaining_monthly_capacity), int(current_shares + shares_delta))
                                 
-                                if remaining_monthly_capacity <= 0:
+                                if shares_candidate <= 0:
                                     shares_required = 0
                                     reason = "monthly_cap_reached"
                                 else:
-                                    shares_required = min(
-                                        shares_required,
-                                        remaining_monthly_capacity,
-                                        int(state.shares)
-                                    )
+                                    requested_gain = shares_candidate * gain_per_share
+                                    if tlh_manager:
+                                        response = tlh_manager.request_usage(requested_gain=requested_gain, source="covered_call_loss_offset")
+                                        approved_gain = response["approved_gain"]
+                                        shares_required = int(floor(approved_gain / gain_per_share)) if gain_per_share > 0 else 0
+                                    else:
+                                        shares_required = int(floor((current_tlh_inventory + tlh_delta - tlh_used) / gain_per_share))
+                                        shares_required = min(shares_required, shares_candidate)
                                     
-                                    trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
+                                    trigger_px = initial_basis_val * (1.0 + share_reduction_trigger_pct)
                                     trigger_met = current_price >= trigger_px
                                     
                                     if current_strategy_key in ("tax_neutral", "harvest"):
                                         monthly_remaining = max(0, max_shares_per_month - shares_sold_this_month)
-                                        print(f"PRE_TRIGGER | tlh_inventory={state.tlh_inventory:,.0f} | gain_per_share={gain_per_share:,.2f} | shares_available={shares_required} | monthly_remaining={monthly_remaining}")
+                                        print(f"PRE_TRIGGER | tlh_inventory={(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f} | gain_per_share={gain_per_share:,.2f} | shares_available={shares_required} | monthly_remaining={monthly_remaining}")
                                     
                                     if not trigger_met:
                                         reason = "trigger_not_met"
@@ -655,7 +672,7 @@ class StrategyUnwindEngine:
                             f"REASON={reason}"
                         )
 
-                        sim_state = SimState(shares=state.shares, cost_basis=state.cost_basis, cash=state.cash, price=current_price)
+                        sim_state = SimState(shares=(current_shares + shares_delta), cost_basis=initial_basis_val, cash=(current_cash + cash_delta), price=float(initial_state.current_price) if initial_state is not None else current_price)
                         sim_params = SimParams(
                             sell_shares=shares_required, 
                             option_loss_available=loss_amt, 
@@ -664,7 +681,7 @@ class StrategyUnwindEngine:
                         )
                         
                         execution_key = current_strategy_key
-                        strat_res = runner.run(execution_key, sim_state, sim_params)
+                        strat_res = runner.run(sim_state, sim_params)
                         
                         shares_sold = strat_res.get("shares_sold", 0)
                         
@@ -680,26 +697,26 @@ class StrategyUnwindEngine:
                         taxes_paid = strat_res.get("taxes", 0.0)
                         tlh_add = strat_res.get("tlh_delta", 0.0)
                         action_str = strat_res.get("action", "NO-SELL")
-                        trigger_px = strat_res.get("trigger_price", state.cost_basis)
+                        trigger_px = strat_res.get("trigger_price", initial_basis_val)
                         
                         realized_gain = strat_res.get("realized_gain", 0.0)
                         
-                        state.shares -= shares_sold
-                        if state.shares < 0:
-                            raise RuntimeError("STRATEGY CONTRACT VIOLATION: state.shares cannot go below zero.")
+                        shares_delta -= shares_sold
+                        if (current_shares + shares_delta) < 0:
+                            raise RuntimeError("STRATEGY CONTRACT VIOLATION: (current_shares + shares_delta) cannot go below zero.")
                         
                         shares_sold_monthly[year_month] = shares_sold_this_month + int(shares_sold)
-                        state.cash += (cash_gen - taxes_paid)
-                        state.cumulative_taxes += taxes_paid
-                        state.realized_stock_gain += realized_gain
+                        cash_delta += (cash_gen - taxes_paid)
+                        cumulative_taxes += taxes_paid
+                        realized_stock_gain += realized_gain
                         
-                        tlh_used_here = min(state.tlh_inventory, realized_gain)
-                        state.tlh_inventory -= tlh_used_here
-                        if state.tlh_inventory < 0:
+                        tlh_used_here = min((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)), realized_gain)
+                        if tlh_manager and tlh_used_here > 0:
+                            tlh_manager.consume(tlh_used_here, source="covered_call_loss_offset")
+                        tlh_used += tlh_used_here
+                        if (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) < 0:
                             raise RuntimeError("STRATEGY CONTRACT VIOLATION: tlh_inventory cannot go below zero.")
-                            
-                        state.total_tlh_used += tlh_used_here
-                        state.cumulative_tlh = state.tlh_inventory
+                        
 
                         total_shares_sold_on_call_loss += int(shares_sold)
 
@@ -709,7 +726,7 @@ class StrategyUnwindEngine:
                             
                         base_log = (
                             f"mode={mode_label} | reason={reason}\n"
-                            f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f}"
+                            f"px=${current_price:,.2f} | basis=${initial_basis_val:,.2f}"
                         )
                         if strategy_key in ("tax_neutral", "harvest"):
                             trigger_met = strat_res.get("action") == "SELL" or shares_required > 0
@@ -720,7 +737,7 @@ class StrategyUnwindEngine:
                         if current_strategy_key in ("tax_neutral", "harvest") and action_str != "NO-SELL":
                              base_log += f" | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}"
                         
-                        financials_log = f"opt_loss=${loss_amt:,.0f} | taxes=${taxes_paid:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${state.tlh_inventory:,.0f}"
+                        financials_log = f"opt_loss=${loss_amt:,.0f} | taxes=${taxes_paid:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f}"
                         
                         if int(shares_sold) > 0:
                             rem_cap = max(0, max_shares_per_month - shares_sold_monthly[year_month])
@@ -748,32 +765,39 @@ class StrategyUnwindEngine:
                             audit_log.append(log_msg)
 
                     # Clear option; allow immediate re-entry
-                    if not enable_tax_loss_harvest:
+                    if not enable_tlh:
                         # roll back what we added to TLH in the handler by setting to 0 delta:
                         # (We keep it simple: do nothing; MVP prefers to always track TLH dollars.)
                         pass
 
-                    state.open_option = None
-                    state.last_close_date = date
+                    open_option = None
+                    last_close_date = date
 
             # -----------------------------
             # Step 5: Independent Sell Engine (NEW)
             # -----------------------------
-            if strategy_key in ("tax_neutral", "harvest") and state.tlh_inventory > 0:
-                gain_per_share = current_price - state.cost_basis
-                trigger_px = state.cost_basis * (1.0 + share_reduction_trigger_pct)
+            if strategy_key in ("tax_neutral", "harvest") and (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) > 0:
+                gain_per_share = current_price - initial_basis_val
+                trigger_px = initial_basis_val * (1.0 + share_reduction_trigger_pct)
                 trigger_met = current_price >= trigger_px
                 
                 if trigger_met and gain_per_share > 0:
                     remaining_monthly_capacity = max_shares_per_month - shares_sold_monthly.get(year_month, 0)
-                    if remaining_monthly_capacity > 0 and state.shares > 0:
+                    if remaining_monthly_capacity > 0 and (current_shares + shares_delta) > 0:
                         
                         shares_to_sell = 0
                         if strategy_key == "harvest":
                             print(f"[SELL_BLOCKED] | reason=harvest_mode | shares_sold=0")
                         else:
-                            max_shares_by_tlh = int(floor(state.tlh_inventory / gain_per_share))
-                            shares_to_sell = min(max_shares_by_tlh, remaining_monthly_capacity, int(state.shares))
+                            shares_candidate = min(remaining_monthly_capacity, int(current_shares + shares_delta))
+                            requested_gain = shares_candidate * gain_per_share
+                            if tlh_manager:
+                                response = tlh_manager.request_usage(requested_gain=requested_gain, source="stock_sale")
+                                approved_gain = response["approved_gain"]
+                                shares_to_sell = int(floor(approved_gain / gain_per_share)) if gain_per_share > 0 else 0
+                            else:
+                                max_shares_by_tlh = int(floor((current_tlh_inventory + tlh_delta - tlh_used) / gain_per_share))
+                                shares_to_sell = min(max_shares_by_tlh, shares_candidate)
                             
                         # --- STRATEGY CONTRACT GUARDS ---
                         if shares_to_sell > 0:
@@ -785,52 +809,51 @@ class StrategyUnwindEngine:
                         
                         if shares_to_sell > 0:
                             proceeds = shares_to_sell * current_price
-                            cost = shares_to_sell * state.cost_basis
+                            cost = shares_to_sell * initial_basis_val
                                 
                             realized_gain = max(0.0, proceeds - cost)
                             
-                            tlh_used_here = min(state.tlh_inventory, realized_gain)
-                            state.tlh_inventory -= tlh_used_here
-                            if state.tlh_inventory < 0:
+                            tlh_used_here = min((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)), realized_gain)
+                            if tlh_manager and tlh_used_here > 0:
+                                tlh_manager.consume(tlh_used_here, source="stock_sale")
+                            tlh_used += tlh_used_here
+                            if (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) < 0:
                                 raise RuntimeError("STRATEGY CONTRACT VIOLATION: tlh_inventory cannot go below zero.")
-                                
-                            state.total_tlh_used += tlh_used_here
-                            state.cumulative_tlh = state.tlh_inventory
                             
-                            state.shares -= shares_to_sell
-                            if state.shares < 0:
-                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: state.shares cannot go below zero.")
+                            shares_delta -= shares_to_sell
+                            if (current_shares + shares_delta) < 0:
+                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: (current_shares + shares_delta) cannot go below zero.")
                             
                             shares_sold_monthly[year_month] = shares_sold_monthly.get(year_month, 0) + shares_to_sell
-                            state.cash += proceeds
-                            state.realized_stock_gain += realized_gain
+                            cash_delta += proceeds
+                            realized_stock_gain += realized_gain
                             
                             if shares_to_sell > 0:
                                 log_msg = (
                                     f"{date.date()} | [INDEPENDENT_SELL] | SELL\n"
                                     f"mode=tax_neutral | reason=global_inventory_trigger\n"
-                                    f"px=${current_price:,.2f} | basis=${state.cost_basis:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}\n"
+                                    f"px=${current_price:,.2f} | basis=${initial_basis_val:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}\n"
                                     f"shares_sold={shares_to_sell} | monthly_cap_remaining={max_shares_per_month - shares_sold_monthly[year_month]}\n"
-                                    f"realized_gain=${realized_gain:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${state.tlh_inventory:,.0f}"
+                                    f"realized_gain=${realized_gain:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f}"
                                 )
                                 audit_log.append(log_msg)
 
             # -----------------------------
             # Step 6: open a new option
             # -----------------------------
-            can_open_today = (state.open_option is None) and (state.shares > 0)
+            can_open_today = (open_option is None) and ((current_shares + shares_delta) > 0)
             
             if can_open_today:
                 # v2: continuous overlay allowed; only blocked by wash-sale cooldown
                 eligible = True
                 
-                if eligible and state.next_call_allowed_date is not None:
-                    if date < state.next_call_allowed_date:
+                if eligible and next_call_allowed_date is not None:
+                    if date < next_call_allowed_date:
                         eligible = False
 
                 if eligible:
-                    covered_shares = int(state.shares * (coverage_pct / 100.0))
-                    covered_shares = max(0, min(covered_shares, int(state.shares)))
+                    covered_shares = int((current_shares + shares_delta) * (coverage_pct / 100.0))
+                    covered_shares = max(0, min(covered_shares, int(current_shares + shares_delta)))
 
                     T_open = float(target_dte_days) / 365.0
                     
@@ -856,9 +879,9 @@ class StrategyUnwindEngine:
                         continue
 
                     # Cash inflow at open (v1)
-                    state.cash += premium_open_total
+                    cash_delta += premium_open_total
 
-                    state.open_option = OptionPos(
+                    open_option = OptionPos(
                         open_date=date,
                         dte_open=int(target_dte_days),
                         strike=float(strike),
@@ -872,17 +895,17 @@ class StrategyUnwindEngine:
                         f"strike=${strike:,.2f} | premium=${premium_open_total:,.0f} | delta<={0.35}"
                     )
 
-                    state.open_next_day = False
+                    
 
             # -----------------------------
             # Record time series (end of day)
             # -----------------------------
-            df.loc[date, "Shares"] = float(state.shares)
-            df.loc[date, "Covered_Shares"] = float(state.open_option.covered_shares if state.open_option else 0.0)
-            df.loc[date, "Strike_Price"] = float(state.open_option.strike if state.open_option else 0.0)
-            df.loc[date, "Option_Premium"] = float(state.open_option.premium_open_total if state.open_option else 0.0)
+            df.loc[date, "Shares"] = float((current_shares + shares_delta))
+            df.loc[date, "Covered_Shares"] = float(open_option.covered_shares if open_option else 0.0)
+            df.loc[date, "Strike_Price"] = float(open_option.strike if open_option else 0.0)
+            df.loc[date, "Option_Premium"] = float(open_option.premium_open_total if open_option else 0.0)
 
-            stock_value = current_price * float(state.shares)
+            stock_value = current_price * float((current_shares + shares_delta))
             df.loc[date, "Stock_Value"] = float(stock_value)
 
             # (We keep Stock_PnL unused/0 in this MVP overlay time series)
@@ -891,12 +914,12 @@ class StrategyUnwindEngine:
             # Keep v1 behavior: Option_PnL column reflects realized option pnl total (not cash)
             df.loc[date, "Option_PnL"] = float(total_realized_option_pnl)
 
-            df.loc[date, "Cumulative_Taxes"] = float(state.cumulative_taxes)
-            df.loc[date, "Cumulative_TLH"] = float(state.cumulative_tlh)
-            df.loc[date, "Realized_Stock_Gain"] = float(state.realized_stock_gain)
+            df.loc[date, "Cumulative_Taxes"] = float(cumulative_taxes)
+            df.loc[date, "Cumulative_TLH"] = float((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)))
+            df.loc[date, "Realized_Stock_Gain"] = float(realized_stock_gain)
 
-            portfolio_value = stock_value + float(state.cash)
-            df.loc[date, "Cash"] = float(state.cash)
+            portfolio_value = stock_value + float(current_cash + cash_delta)
+            df.loc[date, "Cash"] = float(current_cash + cash_delta)
             df.loc[date, "Portfolio_Value"] = float(portfolio_value)
             df.loc[date, "Total_PnL"] = float(portfolio_value - initial_value)
 
@@ -909,14 +932,14 @@ class StrategyUnwindEngine:
             prev_price = current_price
 
         # Forward fill unpopulated rows if simulation exited early
-        if state.shares <= 0:
-            df.loc[date:, "Cash"] = float(state.cash)
-            df.loc[date:, "Portfolio_Value"] = float(state.cash)
-            df.loc[date:, "Total_PnL"] = float(state.cash - initial_value)
+        if (current_shares + shares_delta) <= 0:
+            df.loc[date:, "Cash"] = float(current_cash + cash_delta)
+            df.loc[date:, "Portfolio_Value"] = float(current_cash + cash_delta)
+            df.loc[date:, "Total_PnL"] = float((current_cash + cash_delta) - initial_value)
 
         # Summary
-        final_shares = float(state.shares)
-        final_cash = float(state.cash)
+        final_shares = float((current_shares + shares_delta))
+        final_cash = float(current_cash + cash_delta)
         final_price = float(df["Price"].iloc[-1])
         final_stock_value = final_shares * final_price
 
@@ -964,16 +987,16 @@ class StrategyUnwindEngine:
 
         shares_reduced = int(starting_shares - final_shares)
 
-        tlh_inventory_remaining = state.tlh_inventory
-        gain_per_share = final_price - state.cost_basis
+        tlh_inventory_remaining = (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used))
+        gain_per_share = final_price - initial_basis_val
         raw_available_shares = tlh_inventory_remaining / gain_per_share if gain_per_share > 0 else 0.0
         tax_neutral_shares_available = min(float(remaining_shares), raw_available_shares)
 
         # STEP 5 - Reconcile TLH Totals
-        if abs((state.total_tlh_generated - state.total_tlh_used) - state.tlh_inventory) > 0.01:
+        if abs(tlh_delta - tlh_used - (tlh_inventory_remaining - current_tlh_inventory)) > 0.01:
             logger.warning(
-                f"TLH Reconciliation Failed: generated={state.total_tlh_generated:.2f} - used={state.total_tlh_used:.2f} "
-                f"!= inventory={state.tlh_inventory:.2f}"
+                f"TLH Reconciliation Failed: generated={tlh_delta:.2f} - used={tlh_used:.2f} "
+                f"!= inventory={(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):.2f}"
             )
 
         # Compute averages for trade frequency
@@ -1007,12 +1030,12 @@ class StrategyUnwindEngine:
             "trades_per_year": float(trades_per_year),
             "avg_days_in_trade": float(avg_days_in_trade),
             
-            "realized_stock_gain": float(state.realized_stock_gain),
+            "realized_stock_gain": float(realized_stock_gain),
             "net_option_cash_flow": net_option_cash_flow,
             
             # TLH Inventory Mechanics
-            "tax_loss_inventory": float(state.tlh_inventory),
-            "tlh_used": float(state.total_tlh_used),
+            "tax_loss_inventory": float((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used))),
+            "tlh_used": float(tlh_used),
             "tlh_inventory_remaining": float(tlh_inventory_remaining),
             "gain_per_share": float(gain_per_share),
             "tax_neutral_shares_available": float(tax_neutral_shares_available),
@@ -1027,6 +1050,14 @@ class StrategyUnwindEngine:
         
             "cash_balance": float(ending_cash),
             "total_pnl": float(final_portfolio_value - starting_portfolio_value),
+            "ending_price": float(current_price),
+            "starting_price": float(initial_price),
+            "tlh_delta": float(tlh_delta),
+            "tlh_used": float(tlh_used),
+            "option_pnl": float(option_pnl),
+            "cash_delta": float(cash_delta),
+            "shares_delta": float(shares_delta),
+            "capital_generated": float(cash_delta),
         
             # config echo (locked v1)
             "target_dte_days": int(target_dte_days),
@@ -1040,15 +1071,20 @@ class StrategyUnwindEngine:
             # UI keys required by Streamlit
             "final_cash_proceeds": float(final_cash),        # UI uses this key
             "final_income_cash_balance": float(final_cash),  # optional nicer name
-            "cumulative_taxes": float(state.cumulative_taxes),
+            "cumulative_taxes": float(cumulative_taxes),
         
             # informational
-            "cumulative_tlh": float(state.cumulative_tlh),
+            "cumulative_tlh": float((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used))),
         
             # Basis + trigger echo (MVP)
-            "cost_basis_single_lot": float(state.cost_basis),
+            "cost_basis_single_lot": float(initial_basis_val),
             "share_reduction_trigger_pct": float(share_reduction_trigger_pct),
             "audit_log": audit_log,
+            
+            "is_option_open": open_option is not None,
+            "open_option_premium": float(open_option.premium_open_total) if open_option else 0.0,
+            "open_option": open_option,
+            "next_call_allowed_date": next_call_allowed_date,
         
             # Debug (safe)
             "__debug_code_fingerprint__": "FINGERPRINT_2026_02_23_A",
@@ -1102,7 +1138,7 @@ def run_strategy_comparison(
         dte_days=dte_days,
         roll_frequency_days=roll_frequency_days,
         coverage_pct=coverage_pct,
-        enable_tax_loss_harvest=enable_tax_loss_harvest,
+        enable_tlh=enable_tax_loss_harvest,
         position_reduction_pct_per_quarter=position_reduction_pct_per_quarter,
         reduction_threshold_pct=reduction_threshold_pct,
         share_reduction_trigger_pct=share_reduction_trigger_pct,
