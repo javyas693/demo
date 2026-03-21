@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import replace
 from typing import List, Tuple
@@ -26,9 +26,47 @@ def _build_bounds_list(spec: FrontierSpec, assets: List[str]) -> List[Tuple[floa
 def _frontier_grid(min_vol: float, max_vol: float, k: int) -> np.ndarray:
     if k < 2:
         return np.array([min_vol], dtype=float)
-    # include endpoints
     return np.linspace(min_vol, max_vol, num=k, dtype=float)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Python-native entry point (no xlsx required)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_frontier_from_config(
+    spec: FrontierSpec,
+    allocation_sheet: str = "Sub-Assets",
+    prices_period: str = "5y",
+    cache_path: str | None = None,
+) -> FrontierResult:
+    """
+    Build the efficient frontier without any xlsx files.
+
+    Universe metadata comes from frontier/io_python.py (edit that file to
+    add/remove tickers or change bounds/yields/expense ratios).
+    Prices are fetched from yfinance and optionally cached to disk.
+    """
+    from .io_python import (
+        allocation_config,
+        load_prices_from_yfinance,
+        UNIVERSE_SUB_ASSETS,
+        UNIVERSE_ASSET_CLASS,
+    )
+
+    tickers = UNIVERSE_SUB_ASSETS if allocation_sheet == "Sub-Assets" else UNIVERSE_ASSET_CLASS
+    alloc_wb = allocation_config()
+    prices_df = load_prices_from_yfinance(
+        tickers=tickers,
+        period=prices_period,
+        cache_path=cache_path,
+    )
+
+    return _build_frontier_core(spec, alloc_wb, prices_df, allocation_sheet)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# xlsx entry point (legacy — kept for backward compatibility)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def build_frontier(
     spec: FrontierSpec,
@@ -38,33 +76,36 @@ def build_frontier(
     prices_sheet: str | None = None,
 ) -> FrontierResult:
     """
-    Build deterministic efficient frontier from:
-      - allocation workbook (Asset Class + Sub-Assets)
-      - prices workbook
-
-    Current v1:
-      - expected returns: implied_v1 (yield - expense + growth defaults)
-      - covariance: historical
-      - raw frontier: max return under vol cap
-      - sampling: curve-length + nearest
-
-    Patch 5:
-      - compute input_hash + frontier_hash (persisted by store layer)
-      - validate frontier payload integrity (structure / invariants)
+    Build the efficient frontier from xlsx files (legacy path).
+    Prefer build_frontier_from_config() for new code.
     """
-
-    # --- Load inputs
     alloc_wb = load_allocation_workbook(allocation_xlsx)
-    alloc_obj = alloc_wb["sub_assets"] if allocation_sheet == "Sub-Assets" else alloc_wb["asset_class"]
-
     prices_df = load_prices_matrix(prices_xlsx, sheet_name=prices_sheet)
+    return _build_frontier_core(spec, alloc_wb, prices_df, allocation_sheet)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared core
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_frontier_core(
+    spec: FrontierSpec,
+    alloc_wb: dict,
+    prices_df,
+    allocation_sheet: str = "Sub-Assets",
+) -> FrontierResult:
+    """
+    Shared implementation — accepts pre-loaded allocation config dict and
+    prices DataFrame regardless of how they were sourced.
+    """
+    alloc_obj = alloc_wb["sub_assets"] if allocation_sheet == "Sub-Assets" else alloc_wb["asset_class"]
 
     # intersect assets with available prices
     assets = [t for t in alloc_obj["assets"] if t in prices_df.columns]
     if len(assets) < 2:
-        raise ValueError("Not enough overlapping tickers between allocation and prices.")
+        raise ValueError("Not enough overlapping tickers between allocation config and prices.")
 
-    # Build a fully-populated spec (metadata maps + bounds) for hashing and later storage
+    # Build fully-populated spec
     bounds = {t: alloc_obj["bounds"][t] for t in assets}
     spec2 = FrontierSpec(
         schema_version=spec.schema_version,
@@ -84,27 +125,24 @@ def build_frontier(
         expense_ratio_map=alloc_obj["expense_ratio_map"],
     ).normalized()
 
-    # Patch 5: input fingerprint (determinism + integrity binding)
-    # Persisted by store layer (meta.json) along with status transitions.
     input_hash = stable_hash(spec2)
-
     frontier_version = compute_frontier_version(spec2)
 
-    # --- Compute mu and Sigma
+    # Compute mu and Sigma
     mu = compute_implied_mu(spec2, assets)
-    sigma = compute_historical_cov(prices_df, assets, annualization_factor=spec2.risk_model.annualization_factor)
-
-    # Ensure sigma symmetric numerical
+    sigma = compute_historical_cov(
+        prices_df, assets,
+        annualization_factor=spec2.risk_model.annualization_factor,
+    )
     sigma = 0.5 * (sigma + sigma.T)
 
     bounds_list = _build_bounds_list(spec2, assets)
 
-    # --- Feasible min-vol portfolio
+    # Feasible min-vol portfolio
     w_min = solve_min_vol(sigma, bounds_list)
     min_vol = float(np.sqrt(w_min @ sigma @ w_min))
 
-    # --- Choose max_vol
-    # If user set explicit max, use it; else a conservative max based on single-asset vols under bounds.
+    # Max vol
     if spec2.grid.target_vol_max is not None:
         max_vol = float(spec2.grid.target_vol_max)
     else:
@@ -116,14 +154,12 @@ def build_frontier(
     if spec2.grid.target_vol_min is not None:
         min_vol = float(spec2.grid.target_vol_min)
 
-    # --- Build raw frontier
+    # Build raw frontier
     raw_caps = _frontier_grid(min_vol, max_vol, spec2.grid.grid_points_raw)
 
     points_raw: List[FrontierPoint] = []
     for i, cap in enumerate(raw_caps):
         w = solve_max_return_under_vol_cap(mu, sigma, float(cap), bounds_list)
-
-        # numerical hygiene
         w = np.clip(w, 0.0, 1.0)
         s = float(w.sum())
         if abs(s) > 1e-12:
@@ -141,23 +177,18 @@ def build_frontier(
             )
         )
 
-    # sort by vol (monotonicization)
     points_raw = sorted(points_raw, key=lambda p: p.vol)
-
     points_raw = add_sharpe(points_raw, rf_annual=spec2.rf_annual)
     points_raw = pareto_filter(points_raw)
     points_raw = collapse_duplicates(points_raw)
 
-    # --- Sample (curve-length nearest)
+    # Sample (curve-length nearest)
     points_sampled = sample_curve_length_nearest(points_raw, n=spec2.sampling.points)
-
-    # relabel risk_score 1..N for sampled set
     points_sampled = [
         FrontierPoint(risk_score=k + 1, exp_return=p.exp_return, vol=p.vol, weights=p.weights)
         for k, p in enumerate(points_sampled)
     ]
 
-    # Patch 5: output integrity + fingerprint
     validate_frontier_payload(points_sampled)
 
     frontier_hash = stable_hash(
@@ -168,9 +199,7 @@ def build_frontier(
         }
     )
 
-    # NOTE: input_hash/frontier_hash are intentionally not returned yet to avoid changing FrontierResult.
-    # Patch 5 persists these in frontier/store/fs_store.py (meta.json) alongside FrontierStatus gating.
-    _ = input_hash, frontier_hash  # keep variables "used" without altering return type
+    _ = input_hash, frontier_hash  # persisted by store layer
 
     return FrontierResult(
         spec=spec2,

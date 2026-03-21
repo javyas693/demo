@@ -98,7 +98,7 @@ def validate_frontier_payload(frontier: Any) -> None:
     def has_field(obj: Any, name: str) -> bool:
         return (isinstance(obj, Mapping) and name in obj) or hasattr(obj, name)
 
-    for field in ("vol", "ret", "weights"):
+    for field in ("vol", "exp_return", "weights"):
         if not has_field(sample, field):
             # If your point uses different names, change here once.
             raise IntegrityError(f"Frontier point missing field: {field}")

@@ -40,9 +40,12 @@ def execute_trades(portfolio_state: PortfolioState, trades: List[Dict[str, Any]]
                 
             cash_change -= cost
             
-            if sym in ["JEPQ", "TLTW", "SVOL"]:
+            INCOME_TICKERS = {"JEPQ", "TLTW", "SVOL"}
+            CP_TICKERS = {portfolio_state.ticker}
+            if sym in INCOME_TICKERS:
                 inc_holds[sym] = inc_holds.get(sym, 0.0) + qty
-            elif sym in ["VTI", "TLT", "VXUS", "BND"]:
+            elif sym not in CP_TICKERS:
+                # everything else (frontier ETFs, etc.) goes to model sleeve
                 mod_holds[sym] = mod_holds.get(sym, 0.0) + qty
                 
             positions_updated[sym] = positions_updated.get(sym, 0.0) + qty
@@ -53,7 +56,7 @@ def execute_trades(portfolio_state: PortfolioState, trades: List[Dict[str, Any]]
             
             if sym in ["JEPQ", "TLTW", "SVOL"]:
                 inc_holds[sym] = inc_holds.get(sym, 0.0) - qty
-            elif sym in ["VTI", "TLT", "VXUS", "BND"]:
+            elif sym not in {"JEPQ", "TLTW", "SVOL", portfolio_state.ticker}:
                 mod_holds[sym] = mod_holds.get(sym, 0.0) - qty
             else:
                 # Default assume legacy concentrated position

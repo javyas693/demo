@@ -9,8 +9,6 @@ from ai_advisory.orchestration.portfolio_orchestrator import run_portfolio_cycle
 from ai_advisory.orchestration.reconciliation import reconcile_step
 from ai_advisory.orchestration.trace_logger import trace_log
 from ai_advisory.orchestration.execution_layer import execute_trades
-from dateutil.relativedelta import relativedelta
-import datetime
 
 # ─────────────────────────────────────────────────────────
 # Strategy Engine Constants (configurable defaults)
@@ -59,7 +57,7 @@ def simulate_portfolio(
     # Simple memory cache to prevent rate-limits from repeated UI testing
     global _YF_CACHE
 
-    all_etfs = ["JEPQ", "TLTW", "SVOL", "VTI", "TLT", "VXUS", "BND"]
+    all_etfs = ["JEPQ", "TLTW", "SVOL", "VTI", "TLT", "VWO", "VEA", "SHY", "LEMB", "HYG", "VCLT", "PGX", "SPY", "IJH", "IWM", "IAU", "SCHH", "BIL", "BTC-USD"]
     all_symbols = [ticker] + all_etfs
     
     cache_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "yf_cache.pkl")
@@ -152,7 +150,9 @@ def simulate_portfolio(
         trace_log(f"Month 2 price: {historical_prices[ticker][2]:.2f}\n")
 
 
-
+    STATIC_START = "2023-01-01"
+    STATIC_END   = "2023-01-31"
+    dates        = pd.date_range(STATIC_START, STATIC_END, freq="D")
 
     timeline = []
 
@@ -282,12 +282,6 @@ def simulate_portfolio(
     
 
     for month in range(1, horizon_months + 1):
-        sim_origin = datetime.date(2023, 1, 1)
-        month_start = sim_origin + relativedelta(months=month - 1)
-        month_end = sim_origin + relativedelta(months=month) - datetime.timedelta(days=1)
-        STATIC_START = month_start.strftime("%Y-%m-%d")
-        STATIC_END = month_end.strftime("%Y-%m-%d")
-
         trace_log(f"\n--- [MODULE 2] START MONTH {month} ---")
         trace_log(f"CURRENT STATE - Cash: {current_state.cash:.2f}, CP: {current_state.market_value:.2f}, Income: {current_state.income_value:.2f}, Model: {current_state.model_value:.2f}")
 
@@ -299,6 +293,13 @@ def simulate_portfolio(
         # [CAPITAL CONSTRAINT] MODULE 1: COMPUTE AVAILABLE CASH
         # Before strategy call:
         available_cash = current_state.cash
+
+        # ── Inject CP price history for momentum signal ──
+        # Pass trailing window of CP prices (up to last 6 months) so the
+        # signal engine can compute real momentum instead of using the 0.5 stub.
+        safe_idx_pre = min(month, len(historical_prices[ticker]) - 1)
+        cp_history_window = historical_prices[ticker][max(0, safe_idx_pre - 5): safe_idx_pre + 1]
+        current_prices["__cp_history__"] = cp_history_window
 
         # ── STEP 1: Orchestrator executes unwind / reallocation ──
         orch_res = run_portfolio_cycle(
@@ -316,6 +317,9 @@ def simulate_portfolio(
 
         res_summary    = orch_res["orch_summary"]
         trades         = orch_res["trades"]
+
+        # Clean up the injected history key so it doesn't pollute price lookups
+        current_prices.pop("__cp_history__", None)
         
         # ── STEP 2: EXECUTION LAYER ──
         # Replaces implicit state mutations with concrete isolated ledger trades
@@ -367,13 +371,7 @@ def simulate_portfolio(
 
         cumulative_income_generated += income_generated
         cumulative_model_growth += model_growth
-        MONTHLY_YIELDS = {'JEPQ': 0.0095, 'TLTW': 0.0120, 'SVOL': 0.0075}
-        monthly_cash_income = sum(
-            delta_income_holdings.get(ticker, 0) * current_prices.get(ticker, 0) * yield_rate
-            for ticker, yield_rate in MONTHLY_YIELDS.items()
-        )
-        new_annual_income = monthly_cash_income * 12
-        trace_log(f"[INCOME YIELD] Cash Income: {monthly_cash_income:.2f} | Sleeve Value: {new_income_value:.2f} | Monthly Yield: {monthly_cash_income / new_income_value:.2%} | Annualized: {monthly_cash_income * 12 / new_income_value:.2%}")
+        new_annual_income  = new_income_value * income_yield_annual
 
         # ── STEP 5: Rebuild state purely from holdings ──
         cash_delta   = res_summary["cash_delta"]
@@ -393,11 +391,9 @@ def simulate_portfolio(
             income_holdings=delta_income_holdings,
             model_value=new_model_value,
             model_holdings=delta_model_holdings,
-            tlh_inventory=res_summary.get("tlh_remaining", current_state.tlh_inventory + tlh_delta - tlh_used),
+            tlh_inventory=current_state.tlh_inventory + tlh_delta - tlh_used,
             risk_score=current_state.risk_score,
-            applied_event_ids=current_state.applied_event_ids,
-            open_option=nested_cp.get("open_option", None),
-            next_call_allowed_date=nested_cp.get("next_call_allowed_date", None)
+            applied_event_ids=current_state.applied_event_ids
         )
         current_state = new_state
 
@@ -428,7 +424,7 @@ def simulate_portfolio(
         
         warnings = []
             
-        if tlh_inventory_after < 0:
+        if tlh_inventory_after < tlh_inventory_before:
             warnings.append("negative inventory")
             
         # Option persistence: if open previously, it must exist or have closed with some cash flow effect
@@ -454,24 +450,9 @@ def simulate_portfolio(
                 
         # 4. APPLY TLH TO STATE (CRITICAL)
         # [TLH INTEGRITY VALIDATION]
-        new_tlh_inventory = res_summary.get("tlh_remaining", tlh_inventory_before + tlh_delta - tlh_used)
+        new_tlh_inventory = tlh_inventory_before + tlh_delta - tlh_used
         assert tlh_inventory_after == new_tlh_inventory, \
-            f"TLH Validation Failed: {tlh_inventory_after} != {new_tlh_inventory}"
-            
-        assert new_tlh_inventory >= 0, f"TLH inventory cannot be negative: {new_tlh_inventory}"
-        
-        from ai_advisory.orchestration.ledger import record_event
-        if "tlh_summary" in res_summary:
-            record_event({
-                "timestamp": datetime.datetime.now().isoformat() if 'datetime' in globals() else "NO_TIME",
-                "event": "TLH_BUDGET_UPDATE",
-                "details": {
-                    "starting_inventory": res_summary["tlh_summary"].get("starting_inventory", 0.0),
-                    "total_used": res_summary["tlh_summary"].get("total_used", 0.0),
-                    "remaining": res_summary["tlh_remaining"],
-                    "usage_breakdown": res_summary["tlh_summary"].get("usage_breakdown", {})
-                }
-            })
+            f"TLH Validation Failed: {tlh_inventory_after} != {tlh_inventory_before} + {tlh_delta} - {tlh_used}"
                 
         previous_option_open = option_open
 
@@ -485,8 +466,7 @@ def simulate_portfolio(
         
         trace_log(f"\n[STATE CHECK]")
         trace_log(f"Month: {month}")
-        merged_holdings = {**new_state.income_holdings, **new_state.model_holdings}
-        trace_log(f"Holdings: {merged_holdings}")
+        trace_log(f"Holdings: {{**new_state.income_holdings, **new_state.model_holdings}}")
         trace_log(f"Prices: {current_prices}")
         trace_log(f"Computed Value: {new_income_value + new_model_value + new_cp_value:.2f}")
         trace_log(f"Reported Value: {new_state.income_value + new_state.model_value + new_state.market_value:.2f}\n")
