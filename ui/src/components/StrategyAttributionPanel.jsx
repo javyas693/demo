@@ -31,27 +31,38 @@ export default function StrategyAttributionPanel({ frame, baseFrame }) {
 
   // ── Cumulative capital allocated (from backend trackers) ──
   const incomeAllocated = frame.attr_income_allocated || 0;
-  const modelAllocated  = frame.attr_model_allocated  || 0;
+  const modelAllocated = frame.attr_model_allocated || 0;
 
   // ── TASK 1: Derive performance purely from state ──
   // Income Generated = total income value - what was put in
-  const incomeTotal     = frame.income_value || 0;
+  const incomeTotal = frame.income_value || 0;
   const incomeGenerated = incomeTotal - incomeAllocated;
 
   // Model Growth = total model value - what was put in
-  const modelTotal  = frame.model_value || 0;
+  const modelTotal = frame.model_value || 0;
   const modelGrowth = modelTotal - modelAllocated;
 
   // ── TASK 4: Concentrated position ──
-  const cpInitialValue  = baseFrame?.concentrated_value || frame.attr_cp_initial_value || 0;
-  const cpCurrentValue  = frame.concentrated_value || 0;
-  const cpValueSold     = cpInitialValue - cpCurrentValue;    // always ≥ 0 as shares are sold
-  const cpPrice         = frame.cp_price || concentrated.price || 0;
-  const cpShares        = concentrated.shares || 0;
+  const cpInitialValue = baseFrame?.concentrated_value || frame.attr_cp_initial_value || 0;
+  const cpCurrentValue = frame.concentrated_value || 0;
+
+  // Use backend-tracked value sold (capital actually released from share sales).
+  // Do NOT derive as cpInitialValue - cpCurrentValue: that conflates unrealized
+  // appreciation with sold proceeds and produces a wrong number when the position
+  // grows without any shares being sold.
+  const cpValueSold = frame.attr_cp_value_sold || 0;
+
+  // Appreciation = what the remaining position gained (or lost) in market value.
+  // Formula: current_value - (initial_value - proceeds_from_sales)
+  // i.e. current vs the cost basis of shares still held.
+  const cpAppreciation = cpCurrentValue - (cpInitialValue - cpValueSold);
+
+  const cpPrice = frame.cp_price || concentrated.price || 0;
+  const cpShares = concentrated.shares || 0;
 
   // Per-step organic (for reference)
   const incomeThisStep = frame.income_generated_this_step || 0;
-  const modelThisStep  = frame.model_growth_this_step    || 0;
+  const modelThisStep = frame.model_growth_this_step || 0;
 
   return (
     <div className="w-full mt-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm shrink-0">
@@ -66,16 +77,16 @@ export default function StrategyAttributionPanel({ frame, baseFrame }) {
           </div>
 
           {/* TASK 2 */}
-          <Row label="Capital Allocated"  value={$(incomeAllocated)} accent="text-amber-700" />
-          <Row label="Income Generated"   value={$(incomeGenerated)} accent="text-green-600" />
-          <Row label="Total Value"        value={$(incomeTotal)}     accent="text-amber-900" />
+          <Row label="Capital Allocated" value={$(incomeAllocated)} accent="text-amber-700" />
+          <Row label="Income Generated" value={$(incomeGenerated)} accent="text-green-600" />
+          <Row label="Total Value" value={$(incomeTotal)} accent="text-amber-900" />
 
           {/* TASK 5: Consistency check */}
           <CheckRow a={incomeAllocated} aLabel="in" b={incomeGenerated} bLabel="yield" total={incomeTotal} />
 
           <div className="mt-3 space-y-0.5">
             <Row label="This Month's Yield" value={$(incomeThisStep, 2)} muted indent />
-            <Row label="Annual Income Rate"  value={$(income.annual_income)} muted indent />
+            <Row label="Annual Income Rate" value={$(income.annual_income)} muted indent />
           </div>
         </div>
 
@@ -87,16 +98,16 @@ export default function StrategyAttributionPanel({ frame, baseFrame }) {
           </div>
 
           {/* TASK 3 */}
-          <Row label="Capital Allocated"  value={$(modelAllocated)} accent="text-blue-700" />
-          <Row label="Growth Generated"   value={$(modelGrowth)}    accent="text-green-600" />
-          <Row label="Total Value"        value={$(modelTotal)}     accent="text-blue-900" />
+          <Row label="Capital Allocated" value={$(modelAllocated)} accent="text-blue-700" />
+          <Row label="Growth Generated" value={$(modelGrowth)} accent="text-green-600" />
+          <Row label="Total Value" value={$(modelTotal)} accent="text-blue-900" />
 
           {/* TASK 5: Consistency check */}
           <CheckRow a={modelAllocated} aLabel="in" b={modelGrowth} bLabel="growth" total={modelTotal} />
 
           <div className="mt-3 space-y-0.5">
             <Row label="This Month's Growth" value={$(modelThisStep, 2)} muted indent />
-            <Row label="Expected Return"      value="7.0% / yr"           muted indent />
+            <Row label="Expected Return" value="7.0% / yr" muted indent />
           </div>
         </div>
 
@@ -107,19 +118,19 @@ export default function StrategyAttributionPanel({ frame, baseFrame }) {
             <span className="font-bold text-red-800 text-sm">Concentrated Position</span>
           </div>
 
-          {/* TASK 4 */}
-          <Row label="Initial Value"    value={$(cpInitialValue)} accent="text-red-700" />
-          <Row label="Value Sold"       value={`-${$(cpValueSold)}`} accent="text-emerald-600" />
-          <Row label="Remaining Value"  value={$(cpCurrentValue)} accent="text-red-900" />
+          <Row label="Initial Value" value={$(cpInitialValue)} accent="text-red-700" />
+          <Row label="Value Sold" value={cpValueSold > 0 ? `-${$(cpValueSold)}` : '$0'} accent="text-emerald-600" />
+          <Row label="Appreciation" value={signed(cpAppreciation)} accent={cpAppreciation >= 0 ? 'text-emerald-600' : 'text-red-500'} />
+          <Row label="Remaining Value" value={$(cpCurrentValue)} accent="text-red-900" />
 
-          {/* No check needed, it's purely arithmetic */}
+          {/* Consistency check: initial - sold + appreciation = current */}
           <div className="mt-2 px-2 py-1.5 rounded text-[10px] font-mono bg-green-50 text-green-700">
-            {$(cpInitialValue)} − {$(cpValueSold)} sold = {$(cpCurrentValue)} ✓
+            {$(cpInitialValue)} − {$(cpValueSold)} sold {cpAppreciation >= 0 ? '+' : '−'} {$(Math.abs(cpAppreciation))} chg = {$(cpCurrentValue)} ✓
           </div>
 
           <div className="mt-3 space-y-0.5">
-            <Row label="Current Price"     value={$(cpPrice, 2)}                 muted indent />
-            <Row label="Shares Remaining"  value={cpShares.toLocaleString()}      muted indent />
+            <Row label="Current Price" value={$(cpPrice, 2)} muted indent />
+            <Row label="Shares Remaining" value={cpShares.toLocaleString()} muted indent />
           </div>
         </div>
 

@@ -1,43 +1,39 @@
 """
-Concentrated Position Unwind Strategy Module (Streamlit MVP)
+Concentrated Position Unwind Strategy Module
+ai_advisory/strategy/strategy_unwind.py
 
-Implements:
-1) Buy-and-hold baseline
-2) Covered call overlay strategy (v1: 20Δ / 30D, single option, EOD)
-3) Deterministic early exits with strict priority:
-    1) CLOSE_ASSIGNMENT_PREVENT (ITM + extrinsic <= threshold% of premium_open_per_share)
-    2) CLOSE_PROFIT (profit >= profit_capture_pct of premium)
-    3) CLOSE_STOP (loss >= stop_loss_multiple * premium)
-    4) EXPIRE (dte <= 0)
-4) Optional scheduled position reductions (quarterly %, threshold)
-5) NEW: On option loss, optionally reduce shares ONLY if price is up by X% vs cost basis,
-        and do so in a tax-neutral way under a single-lot basis.
+Responsibilities (this file):
+  - Buy-and-hold baseline
+  - Covered call overlay: option open, mark, early exit, expiry
+  - Option cash accounting: premium inflow at open, cost-to-close outflow at close
+  - TLH delta reporting: tlh_delta += loss_amt on option loss (report only — never consumed here)
+  - Option lifecycle audit log entries
+  - Feed OptionsLedger on every open/close/expire event
 
-Key accounting discipline (v1):
-- Premium is added at OPEN (cash inflow)
-- Cost-to-close is subtracted at CLOSE/EXPIRE (cash outflow)
-- Option PnL is tracked separately as (premium_open_total - close_cost_total)
+Boundary contract (this file NEVER does):
+  - Never makes sell decisions (DecisionService owns all sell logic)
+  - Never sizes shares_to_sell (DecisionService owns sizing)
+  - Never reads, writes, or consumes TLH inventory (DecisionService owns inventory)
+  - Never calls StrategyRunner
+  - Never determines decision mode (Mode 1 / 2 / 3)
 
-Taxes / TLH (MVP simplification):
-- We do NOT model the $3,000 cap or carryforward mechanics.
-- We track TLH as dollars in `cumulative_tlh`.
-- `cumulative_taxes` is treated as estimated tax liability from realized gains:
-    - Option profits taxed at short_term_tax_rate
-    - Stock gains taxed at long_term_tax_rate
-  (Option losses do not create immediate "negative taxes" in this MVP.)
+Integration contract:
+  CP engine opens options via OptionsLedger.open()
+  CP engine closes options via OptionsLedger.close_early() or evaluate_expirations()
+  CP engine calls OptionsLedger.mark_open_positions() each step for UI
+  Orchestrator reads OptionsLedger.pending_events() → tlh_delta → DecisionInput
+  DecisionService reads OptionsLedger.free_shares() → DecisionInput.free_shares
 
-Simplified assumptions:
-- European options (for pricing approximation only)
-- Option pricing uses Black-Scholes approximation
-- No transaction costs, dividends, or vol regimes
-- Uses yfinance for historical prices
+Architecture position (DecisionService_Spec §2):
+  Orchestrator → CP Engine (covered call overlay) → OptionsLedger
+                                                   → tlh_delta reported upward
+  Orchestrator → DecisionService (all sell logic)
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from math import floor
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -45,63 +41,73 @@ import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
 import logging
+
 logger = logging.getLogger(__name__)
 
-from backend.engine.strategy_runner import StrategyRunner
-class SimState:
-    def __init__(self, shares, cost_basis, cash, price):
-        self.shares = shares
-        self.cost_basis = cost_basis
-        self.cash = cash
-        self.price = price
+from ai_advisory.strategy.options_ledger import OptionsLedger, OptionPosition
 
-class SimParams:
-    def __init__(self, sell_shares, option_loss_available, tax_rate, trigger_percent):
-        self.sell_shares = sell_shares
-        self.shares_required = sell_shares  # Alias for strategies
-        self.option_loss_available = option_loss_available
-        self.tax_rate = tax_rate
-        self.trigger_percent = trigger_percent
-# -----------------------------
+
+# ---------------------------------------------------------------------------
 # Data structures
-# -----------------------------
+# ---------------------------------------------------------------------------
 
 @dataclass
 class OptionPos:
-    open_date: pd.Timestamp
-    dte_open: int
-    strike: float
-    covered_shares: int
+    """
+    Local option position mirror used within the sim loop.
+    The authoritative record lives in OptionsLedger.
+    position_id links back to the ledger entry.
+    """
+    position_id:            str
+    open_date:              pd.Timestamp
+    expiry_date:            pd.Timestamp   # calendar expiry date (date-driven)
+    dte_open:               int
+    strike:                 float
+    covered_shares:         int
     premium_open_per_share: float
-    premium_open_total: float  # premium_open_per_share * covered_shares
+    premium_open_total:     float
 
 
 @dataclass
 class OverlayState:
-    shares: float
-    cost_basis: float
-    cash: float
-    open_option: Optional[OptionPos]
+    """
+    Carries state between monthly orchestrator steps.
+    TLH inventory fields removed — owned by DecisionService.
+    """
+    shares:             float
+    cost_basis:         float
+    cash:               float
+    open_option:        Optional[OptionPos]
 
-    cumulative_taxes: float
-    cumulative_tlh: float
-    total_tlh_generated: float
-    total_tlh_used: float
-    tlh_inventory: float
+    cumulative_taxes:   float
     realized_option_pnl: float
-    realized_stock_gain: float
 
-    last_close_date: Optional[pd.Timestamp]
-    open_next_day: bool
+    last_close_date:        Optional[pd.Timestamp]
+    open_next_day:          bool
     next_call_allowed_date: Optional[pd.Timestamp] = None
 
 
-# -----------------------------
+# ---------------------------------------------------------------------------
 # Engine
-# -----------------------------
+# ---------------------------------------------------------------------------
 
 class StrategyUnwindEngine:
-    """Engine for simulating concentrated position unwind strategies."""
+    """
+    Covered call overlay engine for concentrated position management.
+
+    Owns:
+      - Price data loading
+      - Black-Scholes pricing and strike selection
+      - Option lifecycle (open → exit evaluation → close/expire)
+      - Cash accounting for option premium
+      - tlh_delta reporting (never consumption)
+      - OptionsLedger write calls
+
+    Does NOT own:
+      - Sell decisions (DecisionService)
+      - TLH inventory (DecisionService)
+      - Trade execution (Execution Layer)
+    """
 
     def __init__(
         self,
@@ -123,9 +129,9 @@ class StrategyUnwindEngine:
 
         self.price_data = self._load_price_data()
 
-    # -----------------------------
+    # ------------------------------------------------------------------
     # Data load
-    # -----------------------------
+    # ------------------------------------------------------------------
 
     def _load_price_data(self) -> pd.DataFrame:
         import time
@@ -149,7 +155,6 @@ class StrategyUnwindEngine:
         if df is None or df.empty:
             raise ValueError(f"No data available for {self.ticker}")
 
-        # Prefer adjusted close
         if "Adj Close" in df.columns:
             df = df[["Adj Close"]].copy()
             df.columns = ["Price"]
@@ -162,727 +167,452 @@ class StrategyUnwindEngine:
         df = df.dropna()
         if isinstance(df, pd.Series):
             df = df.to_frame(name="Price")
-
         df.index = pd.to_datetime(df.index)
         return df
 
-    # -----------------------------
+    # ------------------------------------------------------------------
     # Option math
-    # -----------------------------
+    # ------------------------------------------------------------------
 
     def black_scholes_call(self, S: float, K: float, T: float, r: float, sigma: float) -> float:
-        """European call approximation."""
+        """European call approximation (Black-Scholes)."""
         if T <= 0:
             return max(S - K, 0.0)
-
         sigma = max(float(sigma), 1e-6)
         S = max(float(S), 1e-9)
         K = max(float(K), 1e-9)
-
         d1 = (math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * math.sqrt(T))
         d2 = d1 - sigma * math.sqrt(T)
-
-        call_price = S * norm.cdf(d1) - K * math.exp(-r * T) * norm.cdf(d2)
-        return max(float(call_price), 0.0)
+        return max(float(S * norm.cdf(d1) - K * math.exp(-r * T) * norm.cdf(d2)), 0.0)
 
     def estimate_volatility(self, lookback_days: int = 60) -> float:
-        """Simple deterministic vol estimate from log returns."""
+        """Deterministic annualised vol from log returns."""
         prices = self.price_data["Price"].values
         if len(prices) < 3:
             return 0.30
-
-        window = prices[-min(lookback_days, len(prices)) :]
+        window = prices[-min(lookback_days, len(prices)):]
         rets = np.diff(np.log(window))
         if len(rets) < 2:
             return 0.30
-
-        daily_vol = float(np.std(rets))
-        annual_vol = daily_vol * math.sqrt(252)
-        return max(annual_vol, 0.10)
+        return max(float(np.std(rets)) * math.sqrt(252), 0.10)
 
     def strike_for_target_delta(
         self, S: float, T: float, r: float, sigma: float, target_delta: float = 0.20
     ) -> float:
         """
-        Deterministic Black-Scholes strike solver from target call delta.
-        For European call: delta = N(d1) => d1 = N^{-1}(delta)
-        K = S * exp(-(d1*sigma*sqrt(T) - (r+0.5*sigma^2)*T))
+        Deterministic strike solver from target call delta.
+        delta = N(d1) → d1 = N⁻¹(delta)
+        K = S * exp(-(d1*sigma*sqrt(T) - (r+0.5*sigma²)*T))
         """
-        T = max(float(T), 1e-9)
+        T     = max(float(T), 1e-9)
         sigma = max(float(sigma), 1e-6)
-        td = min(max(float(target_delta), 1e-6), 1 - 1e-6)
+        td    = min(max(float(target_delta), 1e-6), 1 - 1e-6)
+        d1    = float(norm.ppf(td))
+        return max(float(S) * math.exp(-(d1 * sigma * math.sqrt(T) - (r + 0.5 * sigma * sigma) * T)), 0.01)
 
-        d1 = float(norm.ppf(td))
-        exponent = -(d1 * sigma * math.sqrt(T) - (r + 0.5 * sigma * sigma) * T)
-        K = float(S) * math.exp(exponent)
-        return max(K, 0.01)
-
-    # -----------------------------
+    # ------------------------------------------------------------------
     # Baseline
-    # -----------------------------
+    # ------------------------------------------------------------------
 
     def run_baseline(self) -> Dict[str, Any]:
         df = self.price_data.copy()
-        df["Shares"] = float(self.initial_shares)
-        df["Stock_Value"] = df["Price"] * df["Shares"]
-
-        initial_value = float(df["Stock_Value"].iloc[0])
-        df["Stock_PnL"] = df["Stock_Value"] - initial_value
-        df["Option_PnL"] = 0.0
-        df["Total_PnL"] = df["Stock_PnL"]
+        df["Shares"]          = float(self.initial_shares)
+        df["Stock_Value"]     = df["Price"] * df["Shares"]
+        initial_value         = float(df["Stock_Value"].iloc[0])
+        df["Stock_PnL"]       = df["Stock_Value"] - initial_value
+        df["Option_PnL"]      = 0.0
+        df["Total_PnL"]       = df["Stock_PnL"]
         df["Cumulative_Taxes"] = 0.0
-        df["Covered_Shares"] = 0.0
-        df["Strike_Price"] = 0.0
+        df["Covered_Shares"]  = 0.0
+        df["Strike_Price"]    = 0.0
+        final_value           = float(df["Stock_Value"].iloc[-1])
 
-        final_value = float(df["Stock_Value"].iloc[-1])
-        total_return = (final_value / initial_value - 1.0) * 100.0
-
-        summary = {
-            "strategy": "Buy-and-Hold Baseline",
-            "initial_shares": self.initial_shares,
-            "final_shares": self.initial_shares,
-            "initial_value": initial_value,
-            "final_value": final_value,
-            "total_return_pct": total_return,
-            "stock_pnl": float(df["Stock_PnL"].iloc[-1]),
-            "option_pnl": 0.0,
-            "total_pnl": float(df["Total_PnL"].iloc[-1]),
-            "cumulative_taxes": 0.0,
+        return {
+            "time_series": df.reset_index(),
+            "summary": {
+                "strategy":        "Buy-and-Hold Baseline",
+                "initial_shares":  self.initial_shares,
+                "final_shares":    self.initial_shares,
+                "initial_value":   initial_value,
+                "final_value":     final_value,
+                "total_return_pct": (final_value / initial_value - 1.0) * 100.0,
+                "stock_pnl":       float(df["Stock_PnL"].iloc[-1]),
+                "option_pnl":      0.0,
+                "total_pnl":       float(df["Total_PnL"].iloc[-1]),
+                "cumulative_taxes": 0.0,
+            },
         }
 
-        return {"time_series": df.reset_index(), "summary": summary}
-
-    # -----------------------------
-    # Overlay helpers
-    # -----------------------------
-
-    def _init_overlay_state(self, cost_basis: float) -> OverlayState:
-        return OverlayState(
-            shares=float(self.initial_shares),
-            cost_basis=float(cost_basis),
-            cash=0.0,
-            open_option=None,
-            cumulative_taxes=0.0,
-            cumulative_tlh=0.0,
-            total_tlh_generated=0.0,
-            total_tlh_used=0.0,
-            tlh_inventory=0.0,
-            realized_option_pnl=0.0,
-            realized_stock_gain=0.0,
-            last_close_date=None,
-            open_next_day=True,
-            next_call_allowed_date=None,
-        )
-
-    @staticmethod
-    def _portfolio_value(state: OverlayState, price: float) -> float:
-        return state.shares * price + state.cash
+    # ------------------------------------------------------------------
+    # Exit evaluation (CP engine's responsibility — unchanged)
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _evaluate_exit_reason(
-        intrinsic: float,
-        extrinsic: float,
-        premium_open_per_share: float,
-        option_mark: float,
-        dte_remaining: int,
-        profit_capture_pct: float,
-        stop_loss_multiple: float,
+        intrinsic:               float,
+        extrinsic:               float,
+        premium_open_per_share:  float,
+        option_mark:             float,
+        dte_remaining:           int,
+        profit_capture_pct:      float,
+        stop_loss_multiple:      float,
         extrinsic_threshold_pct: float,
     ) -> str:
         """
         Strict v1 priority:
-          1) CLOSE_ASSIGNMENT_PREVENT (ITM + extrinsic <= threshold% of premium_open_per_share)
-          2) CLOSE_PROFIT (>= profit_capture_pct * premium)
-          3) CLOSE_STOP (<= -stop_loss_multiple * premium)
-          4) EXPIRE (dte <= 0)
+          1) CLOSE_ASSIGNMENT_PREVENT
+          2) CLOSE_PROFIT
+          3) CLOSE_STOP
+          4) EXPIRE
         """
-        premium_open_per_share = max(float(premium_open_per_share), 1e-9)
+        premium_open_per_share    = max(float(premium_open_per_share), 1e-9)
         profit_if_close_per_share = premium_open_per_share - float(option_mark)
 
-        # 1) Assignment prevention
         if intrinsic > 0 and extrinsic <= float(extrinsic_threshold_pct) * premium_open_per_share:
             return "CLOSE_ASSIGNMENT_PREVENT"
 
-        # 2) Profit capture
-        if profit_capture_pct < 1.0: # If it's 1.0 (100%), we never capture early
+        if profit_capture_pct < 1.0:
             if profit_capture_pct <= 0.0:
-                # 0% edge case: capture the second it is strictly profitable
                 if profit_if_close_per_share > 0.0:
                     return "CLOSE_PROFIT"
             else:
-                # Normal capture logic
                 if profit_if_close_per_share >= float(profit_capture_pct) * premium_open_per_share:
                     return "CLOSE_PROFIT"
 
-        # 3) Stop loss
         if profit_if_close_per_share <= -float(stop_loss_multiple) * premium_open_per_share:
             return "CLOSE_STOP"
 
-        # 4) Expiration
         if int(dte_remaining) <= 0:
             return "EXPIRE"
 
         return ""
 
-    def _handle_option_loss_tax_neutral_single_lot(
-            self,
-            state: OverlayState,
-            option_loss_abs: float,
-            current_price: float,
-            share_reduction_trigger_pct: float,
-    ) -> int:
-        result, new_shares, new_cash, tlh_delta = handle_option_loss_tax_neutral_single_lot(
-            shares=state.shares,
-            cost_basis=state.cost_basis,
-            cash=state.cash,
-            option_loss_abs=option_loss_abs,
-            current_price=current_price,
-            share_reduction_trigger_pct=share_reduction_trigger_pct,
-        )
-
-        # Update state from returned values
-        state.shares = float(new_shares)
-        state.cash = float(new_cash)
-
-        # Realized stock gain (used for reporting + taxes)
-        if result.realized_stock_gain > 0:
-            state.realized_stock_gain += float(result.realized_stock_gain)
-            state.cumulative_taxes += (float(result.realized_stock_gain) * self.long_term_tax_rate
-            )
-
-        # TLH delta from handler
-        if tlh_delta > 0:
-            state.cumulative_tlh += float(tlh_delta)
-
-        return int(result.shares_sold)
-    # -----------------------------
-    # Covered call overlay (v1 + new trigger logic)
-    # -----------------------------
+    # ------------------------------------------------------------------
+    # Covered call overlay
+    # ------------------------------------------------------------------
 
     def run_covered_call_overlay(
         self,
-        enable_covered_call: bool = True,
-        enable_tlh: bool = True,
-        enable_unwind: bool = True,
-        share_reduction_trigger_pct: float = 0.3,
-        cost_basis: Optional[float] = None,
-        coverage_pct: float = 50.0,
-        target_dte_days: int = 30,
-        target_delta: float = 0.20,
-        profit_capture_pct: float = 0.50,
-        max_shares_per_month: int = 200,
-        starting_cash: float = 0.0,
-        initial_state=None,
-        tlh_manager=None,
-        # Default legacy fallback
-        stop_loss_multiple: float = 1.00,
-        extrinsic_threshold_pct: float = 0.05,
-        roll_threshold: float = 0.03,
+        options_ledger:                  OptionsLedger,
+        enable_covered_call:             bool  = True,
+        coverage_pct:                    float = 50.0,
+        target_dte_days:                 int   = 30,
+        target_delta:                    float = 0.20,
+        profit_capture_pct:              float = 0.50,
+        stop_loss_multiple:              float = 1.00,
+        extrinsic_threshold_pct:         float = 0.05,
+        wash_sale_cooldown_days:         int   = 0,
         position_reduction_pct_per_quarter: float = 0.0,
-        reduction_threshold_pct: Optional[float] = None,
-        wash_sale_cooldown_days: int = 0,
-        cash_return_mode: str = "underlying"
+        reduction_threshold_pct:         Optional[float] = None,
+        cost_basis:                      Optional[float] = None,
+        starting_cash:                   float = 0.0,
+        initial_state:                   Any   = None,
+        cash_return_mode:                str   = "underlying",
     ) -> Dict[str, Any]:
-        runner = StrategyRunner()
-        # execution key depends on overlays: if unwind is explicitly active, use tax_neutral, else harvest (TLH)
-        strategy_key = "tax_neutral" if enable_unwind else "harvest"
-        
+        """
+        Run the covered call overlay for one simulation window.
+
+        Returns a result dict containing:
+          - time_series: DataFrame with option lifecycle columns
+          - summary: option-specific metrics (no sell/TLH keys)
+          - tlh_delta: total TLH generated from option losses this run (report only)
+
+        DecisionService integration:
+          Caller (orchestrator) reads options_ledger.pending_events() after this
+          returns, sums tlh_delta, and passes it into DecisionInput.tlh_delta_this_step.
+          Caller reads options_ledger.free_shares() for DecisionInput.free_shares.
+        """
         df = self.price_data.copy()
 
-        # Override entire price series with current simulation price
+        # Single-row mode: override price with live price when orchestrator passes state
         if initial_state is not None and getattr(initial_state, 'current_price', 0.0) > 0.0:
-            live_price = float(initial_state.current_price)
-            # Keep only one row to prevent stale daily prices from driving decisions
             df = df.iloc[[-1]].copy()
-            df["Price"] = live_price
+            df["Price"] = float(initial_state.current_price)
 
-        # Initialize columns
-        df["Shares"] = 0.0
-        df["Covered_Shares"] = 0.0
-        df["Stock_Value"] = 0.0
-        df["Stock_PnL"] = 0.0
-        df["Option_PnL"] = 0.0
-        df["Total_PnL"] = 0.0
-        df["Cumulative_Taxes"] = 0.0
-        df["Strike_Price"] = 0.0
-        df["Option_Premium"] = 0.0
-
-        # Debug/verification columns (safe for viz to ignore)
-        df["Cash"] = 0.0
-        df["Portfolio_Value"] = 0.0
-        df["Option_Mark"] = 0.0
-        df["Intrinsic"] = 0.0
-        df["Extrinsic"] = 0.0
+        # Initialize time-series columns
+        for col in [
+            "Shares", "Covered_Shares", "Stock_Value", "Stock_PnL",
+            "Option_PnL", "Total_PnL", "Cumulative_Taxes",
+            "Strike_Price", "Option_Premium", "Cash", "Portfolio_Value",
+            "Option_Mark", "Intrinsic", "Extrinsic", "Realized_Stock_Gain",
+        ]:
+            df[col] = 0.0
         df["Exit_Reason"] = ""
-        df["Cumulative_TLH"] = 0.0
-        df["Realized_Stock_Gain"] = 0.0
 
-        # Initials
-        initial_price = float(df["Price"].iloc[0])
-        initial_value = initial_price * float(self.initial_shares)
+        initial_price    = float(df["Price"].iloc[0])
+        initial_value    = initial_price * float(self.initial_shares)
+        basis            = float(cost_basis) if cost_basis is not None else initial_price
 
-        basis = float(cost_basis) if cost_basis is not None else initial_price
-        
-        # --- DELTAS ---
-        shares_delta = 0.0
-        cash_delta = 0.0
-        tlh_delta = 0.0
-        tlh_used = 0.0
-        option_pnl = 0.0
-        realized_stock_gain = 0.0
-        cumulative_taxes = 0.0
-        
-        # --- LOCALS ---
-        current_shares = float(initial_state.shares) if initial_state is not None else float(self.initial_shares)
-        current_cash = float(initial_state.cash) if initial_state is not None else starting_cash
+        # State carried across rows
+        current_shares   = float(initial_state.shares)    if initial_state is not None else float(self.initial_shares)
+        current_cash     = float(initial_state.cash)      if initial_state is not None else starting_cash
         initial_basis_val = float(initial_state.cost_basis) if initial_state is not None else basis
-        current_tlh_inventory = float(initial_state.tlh_inventory) if initial_state is not None else 0.0
-        
-        open_option = getattr(initial_state, 'open_option', None) if initial_state is not None else None
-        next_call_allowed_date = getattr(initial_state, 'next_call_allowed_date', None) if initial_state is not None else None
 
-        # Removed state initialization
-        # Removed current_cash = starting_cash
+        shares_delta     = 0.0
+        cash_delta       = 0.0
 
-        # Volatility (deterministic)
-        volatility = self.estimate_volatility()
+        open_option: Optional[OptionPos] = (
+            getattr(initial_state, 'open_option', None) if initial_state is not None else None
+        )
+        next_call_allowed_date: Optional[pd.Timestamp] = (
+            getattr(initial_state, 'next_call_allowed_date', None) if initial_state is not None else None
+        )
 
-        # Scheduled reduction tracking (kept)
+        volatility       = self.estimate_volatility()
+
+        # Option income / loss reporting (CP engine scope only)
+        total_realized_option_pnl   = 0.0
+        total_realized_option_loss  = 0.0
+        option_premium_collected    = 0.0
+        option_buyback_cost         = 0.0
+        option_income               = 0.0
+        option_losses               = 0.0
+        tlh_delta_reported          = 0.0   # reported upward; never consumed here
+        yearly_tax_ledger: Dict     = {}
+
+        # Scheduled reduction tracking (orthogonal to sell logic — kept)
         last_reduction_date = df.index[0]
         reduction_triggered = False
 
-        prev_price: Optional[float] = None
-
-        # Reporting counters (v1)
-        total_realized_option_loss = 0.0
-        total_shares_sold_on_call_loss = 0
-        total_realized_option_pnl = 0.0
-        
-        # Trade Frequency Metrics
-        total_trades = 0
-        total_days_in_trade = 0
-        
-        # Phase 1: Separate Option Income vs Loss
-        option_premium_collected = 0.0
-        option_buyback_cost = 0.0
-        option_income = 0.0
-        option_losses = 0.0
-        
-        # Phase 2: Yearly Tax Ledger
-        yearly_tax_ledger = {}
-        
-        # Audit log initialization
+        # Audit log: option lifecycle events only
         audit_log = [
             f"{df.index[0].date()} | INITIALIZE | CONCENTRATED START\n"
             f"Basis: ${initial_basis_val:,.2f} | Cash: ${starting_cash:,.2f} | Shares: {int(self.initial_shares)}"
         ]
-        
-        # Monthly sale tracking
-        shares_sold_monthly = {} # { (year, month): shares_sold }
-        
+
         for date, row in df.iterrows():
             current_price = float(row["Price"])
-            exit_reason = ""
-            
-            # Stop simulation if no shares left
+            exit_reason   = ""
+
             if (current_shares + shares_delta) <= 0:
                 break
 
-            # ==========================================================
-            # EXECUTION ORDER (DO NOT MODIFY):
-            # 1. Option processing
-            # 2. TLH update
-            # 3. Independent sell
-            # 4. Share execution
-            # ==========================================================
-
-            # Reset monthly counter
-            year_month = (date.year, date.month)
-            shares_sold_this_month = shares_sold_monthly.get(year_month, 0)
-
-            # -----------------------------
-            # Step 1: cash accrual at underlying return (Removed for MVP)
-            # -----------------------------
-            # Cash should simply act as cash, PV reflects stock dropping.
-
-            # -----------------------------
-            # Optional scheduled reductions (kept)
-            # NOTE: This MVP does not tax these scheduled reductions.
-            # -----------------------------
+            # ----------------------------------------------------------
+            # Scheduled reductions (kept — orthogonal to sell decisions)
+            # NOTE: not taxed in MVP
+            # ----------------------------------------------------------
             if position_reduction_pct_per_quarter > 0:
                 days_since = (date - last_reduction_date).days
                 if days_since >= 90:
-                    reduction_amount = int((current_shares + shares_delta) * (position_reduction_pct_per_quarter / 100.0))
-                    reduction_amount = min(reduction_amount, int(current_shares + shares_delta))
+                    reduction_amount = min(
+                        int((current_shares + shares_delta) * (position_reduction_pct_per_quarter / 100.0)),
+                        int(current_shares + shares_delta),
+                    )
                     if reduction_amount > 0:
-                        cash_delta += reduction_amount * current_price
-                        current_shares = max(0.0, (current_shares + shares_delta) - reduction_amount)
+                        cash_delta     += reduction_amount * current_price
+                        current_shares  = max(0.0, (current_shares + shares_delta) - reduction_amount)
                         last_reduction_date = date
 
             if reduction_threshold_pct is not None and not reduction_triggered:
                 gain_pct = (current_price / initial_price - 1.0) * 100.0
                 if gain_pct >= float(reduction_threshold_pct):
-                    reduction_amount = int((current_shares + shares_delta) * 0.25)
-                    reduction_amount = min(reduction_amount, int(current_shares + shares_delta))
+                    reduction_amount = min(
+                        int((current_shares + shares_delta) * 0.25),
+                        int(current_shares + shares_delta),
+                    )
                     if reduction_amount > 0:
-                        cash_delta += reduction_amount * current_price
-                        current_shares = max(0.0, (current_shares + shares_delta) - reduction_amount)
+                        cash_delta     += reduction_amount * current_price
+                        current_shares  = max(0.0, (current_shares + shares_delta) - reduction_amount)
                         reduction_triggered = True
 
-            # -----------------------------
-            # Step 2/3: evaluate exit rules if option is open (v1 priority)
-            # -----------------------------
+            # ----------------------------------------------------------
+            # Step 1: Mark open position (UI + exit evaluation)
+            # ----------------------------------------------------------
             option_mark = 0.0
-            intrinsic = 0.0
-            extrinsic = 0.0
+            intrinsic   = 0.0
+            extrinsic   = 0.0
 
             if open_option is not None and open_option.covered_shares > 0:
-                days_open = (date - open_option.open_date).days
-                dte_remaining = int(target_dte_days) - int(days_open)
-                T = max(dte_remaining, 0) / 365.0
+                # Date-driven DTE — uses expiry_date, not sim cadence
+                dte_remaining = open_option.expiry_date.date() - date.date()
+                dte_days_remaining = dte_remaining.days
+                T = max(dte_days_remaining, 0) / 365.0
 
                 option_mark = self.black_scholes_call(
                     current_price, open_option.strike, T, self.risk_free_rate, volatility
                 )
-
                 intrinsic = max(current_price - open_option.strike, 0.0)
                 extrinsic = max(option_mark - intrinsic, 0.0)
 
+                # Mark the ledger position for UI
+                options_ledger.mark_open_positions(
+                    current_price=current_price,
+                    volatility=volatility,
+                    risk_free_rate=self.risk_free_rate,
+                    current_date=date.date(),
+                    bs_call_fn=self.black_scholes_call,
+                )
+
+                # ----------------------------------------------------------
+                # Step 2: Exit evaluation (v1 priority — CP engine owns this)
+                # ----------------------------------------------------------
                 exit_reason = self._evaluate_exit_reason(
                     intrinsic=intrinsic,
                     extrinsic=extrinsic,
                     premium_open_per_share=open_option.premium_open_per_share,
                     option_mark=option_mark,
-                    dte_remaining=dte_remaining,
+                    dte_remaining=dte_days_remaining,
                     profit_capture_pct=profit_capture_pct,
                     stop_loss_multiple=stop_loss_multiple,
                     extrinsic_threshold_pct=extrinsic_threshold_pct,
                 )
 
                 if exit_reason:
-                    # Expiration uses intrinsic as settlement/close value
-                    close_per_share = intrinsic if exit_reason == "EXPIRE" else option_mark
+                    # Settlement value
+                    close_per_share  = intrinsic if exit_reason == "EXPIRE" else option_mark
                     close_cost_total = close_per_share * float(open_option.covered_shares)
 
-                    # Cash accounting (v1)
+                    # Cash accounting (v1 discipline)
                     cash_delta -= close_cost_total
 
-                    # Realized option PnL for THIS trade (signed)
-                    realized_option_pnl = open_option.premium_open_total - close_cost_total
+                    # Realized option PnL
+                    realized_option_pnl   = open_option.premium_open_total - close_cost_total
                     option_premium_collected += open_option.premium_open_total
-                    option_buyback_cost += close_cost_total
-
-                    # Reporting totals
+                    option_buyback_cost      += close_cost_total
                     total_realized_option_pnl += realized_option_pnl
-                    option_pnl += realized_option_pnl
-                    
-                    # Phase 2: Yearly Tax Ledger update
+
+                    # Yearly tax ledger
                     year = date.year
                     if year not in yearly_tax_ledger:
                         yearly_tax_ledger[year] = {
                             "option_income": 0.0,
                             "option_losses": 0.0,
                             "net_capital_result": 0.0,
-                            "tlh_generated": 0.0
+                            "tlh_generated": 0.0,
                         }
 
-                    if realized_option_pnl >= 0:  # MVP: ignore option-profit taxes
+                    if realized_option_pnl >= 0:
                         option_income += realized_option_pnl
-                        yearly_tax_ledger[year]["option_income"] += realized_option_pnl
-                        yearly_tax_ledger[year]["net_capital_result"] = yearly_tax_ledger[year]["option_income"] - yearly_tax_ledger[year]["option_losses"]
+                        yearly_tax_ledger[year]["option_income"]      += realized_option_pnl
+                        yearly_tax_ledger[year]["net_capital_result"]  = (
+                            yearly_tax_ledger[year]["option_income"]
+                            - yearly_tax_ledger[year]["option_losses"]
+                        )
                         yearly_tax_ledger[year]["tlh_generated"] = yearly_tax_ledger[year]["option_losses"]
-                        
                         audit_log.append(
                             f"{date.date()} | {exit_reason} | NO-LOSS\n"
                             f"opt_profit=${realized_option_pnl:,.0f}"
                         )
-                    if realized_option_pnl < 0:
+                    else:
                         loss_amt = abs(realized_option_pnl)
-                        option_losses += loss_amt
+                        option_losses            += loss_amt
                         total_realized_option_loss += loss_amt
-                        
-                        yearly_tax_ledger[year]["option_losses"] += loss_amt
-                        yearly_tax_ledger[year]["net_capital_result"] = yearly_tax_ledger[year]["option_income"] - yearly_tax_ledger[year]["option_losses"]
-                        yearly_tax_ledger[year]["tlh_generated"] = yearly_tax_ledger[year]["option_losses"]
-                        
-                        # GLOBAL TLH INVENTORY ACCUMULATION
-                        tlh_delta += loss_amt
-                        if tlh_manager:
-                            tlh_manager.add_tlh(loss_amt, "covered_call_loss_offset")
 
-                        # TLH INVENTORY TRACE
-                        print(f"[{date.date()}] TLH UPDATE | generated={loss_amt:,.0f} | inventory={(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f}")
-                        
-                        # Wash Sale Cooldown
+                        yearly_tax_ledger[year]["option_losses"]      += loss_amt
+                        yearly_tax_ledger[year]["net_capital_result"]  = (
+                            yearly_tax_ledger[year]["option_income"]
+                            - yearly_tax_ledger[year]["option_losses"]
+                        )
+                        yearly_tax_ledger[year]["tlh_generated"] = yearly_tax_ledger[year]["option_losses"]
+
+                        # TLH reporting — report only, never consumed here
+                        tlh_delta_reported += loss_amt
+
+                        # Wash-sale cooldown
                         if wash_sale_cooldown_days > 0:
                             next_call_allowed_date = pd.Timestamp(date) + pd.Timedelta(days=wash_sale_cooldown_days)
 
-                        current_strategy_key = strategy_key
-                        
-                        if current_strategy_key not in ("harvest", "tax_neutral"):
-                            mode_label = "UNKNOWN_MODE"
-                            reason = "unknown"
-                            shares_required = 0
-                            strat_log_prefix = "UNKNOWN"
-                        else:
-                            mode_label = "HARVEST_MODE" if current_strategy_key == "harvest" else "PREMIUM_COLLECTION"
-                            strat_log_prefix = "HARVEST_MODE" if current_strategy_key == "harvest" else "TAX_NEUTRAL_MODE"
-                            
-                            gain_per_share = current_price - initial_basis_val
-                            if gain_per_share <= 0 or (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) <= 0:  # Gain <= 0 or no TLH
-                                shares_required = 0
-                                reason = "no_gain_available" if gain_per_share <= 0 else "no_tlh_available"
-                            else:
-                                remaining_monthly_capacity = max_shares_per_month - shares_sold_this_month
-                                shares_candidate = min(max(0, remaining_monthly_capacity), int(current_shares + shares_delta))
-                                
-                                if shares_candidate <= 0:
-                                    shares_required = 0
-                                    reason = "monthly_cap_reached"
-                                else:
-                                    requested_gain = shares_candidate * gain_per_share
-                                    if tlh_manager:
-                                        response = tlh_manager.request_usage(requested_gain=requested_gain, source="covered_call_loss_offset")
-                                        approved_gain = response["approved_gain"]
-                                        shares_required = int(floor(approved_gain / gain_per_share)) if gain_per_share > 0 else 0
-                                    else:
-                                        shares_required = int(floor((current_tlh_inventory + tlh_delta - tlh_used) / gain_per_share))
-                                        shares_required = min(shares_required, shares_candidate)
-                                    
-                                    trigger_px = initial_basis_val * (1.0 + share_reduction_trigger_pct)
-                                    trigger_met = current_price >= trigger_px
-                                    
-                                    if current_strategy_key in ("tax_neutral", "harvest"):
-                                        monthly_remaining = max(0, max_shares_per_month - shares_sold_this_month)
-                                        print(f"PRE_TRIGGER | tlh_inventory={(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f} | gain_per_share={gain_per_share:,.2f} | shares_available={shares_required} | monthly_remaining={monthly_remaining}")
-                                    
-                                    if not trigger_met:
-                                        reason = "trigger_not_met"
-                                        shares_required = 0  # EXPLICIT ENFORCEMENT
-                                    elif current_strategy_key == "harvest":
-                                        reason = "harvest_mode"
-                                        print(f"[SELL_BLOCKED] | reason=harvest_mode | shares_sold=0")
-                                        shares_required = 0  # EXPLICIT ENFORCEMENT
-                                    else:
-                                        reason = "trigger_met"
-                                        
-                        logger.debug(
-                            f"LOSS={loss_amt:.2f} "
-                            f"MODE={mode_label} "
-                            f"REASON={reason}"
+                        audit_log.append(
+                            f"{date.date()} | {exit_reason} | OPTION-LOSS\n"
+                            f"loss=${loss_amt:,.0f} | tlh_delta_reported=${tlh_delta_reported:,.0f}\n"
+                            f"NOTE: sell decision deferred to DecisionService"
                         )
 
-                        sim_state = SimState(shares=(current_shares + shares_delta), cost_basis=initial_basis_val, cash=(current_cash + cash_delta), price=float(initial_state.current_price) if initial_state is not None else current_price)
-                        sim_params = SimParams(
-                            sell_shares=shares_required, 
-                            option_loss_available=loss_amt, 
-                            tax_rate=self.long_term_tax_rate, 
-                            trigger_percent=share_reduction_trigger_pct
+                    # Notify OptionsLedger of close
+                    if exit_reason == "EXPIRE":
+                        options_ledger.evaluate_expirations(
+                            current_date=date.date(),
+                            current_price=current_price,
                         )
-                        
-                        execution_key = current_strategy_key
-                        strat_res = runner.run(sim_state, sim_params)
-                        
-                        shares_sold = strat_res.get("shares_sold", 0)
-                        
-                        # --- STRATEGY CONTRACT GUARDS ---
-                        if shares_sold > 0:
-                            if current_strategy_key == "harvest":
-                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: harvest mode attempted to sell shares.")
-                            if not trigger_met:
-                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: tax-neutral mode attempted to sell shares without trigger_met being True.")
-                        # --------------------------------
-                        
-                        cash_gen = strat_res.get("cash_generated", 0.0)
-                        taxes_paid = strat_res.get("taxes", 0.0)
-                        tlh_add = strat_res.get("tlh_delta", 0.0)
-                        action_str = strat_res.get("action", "NO-SELL")
-                        trigger_px = strat_res.get("trigger_price", initial_basis_val)
-                        
-                        realized_gain = strat_res.get("realized_gain", 0.0)
-                        
-                        shares_delta -= shares_sold
-                        if (current_shares + shares_delta) < 0:
-                            raise RuntimeError("STRATEGY CONTRACT VIOLATION: (current_shares + shares_delta) cannot go below zero.")
-                        
-                        shares_sold_monthly[year_month] = shares_sold_this_month + int(shares_sold)
-                        cash_delta += (cash_gen - taxes_paid)
-                        cumulative_taxes += taxes_paid
-                        realized_stock_gain += realized_gain
-                        
-                        tlh_used_here = min((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)), realized_gain)
-                        if tlh_manager and tlh_used_here > 0:
-                            tlh_manager.consume(tlh_used_here, source="covered_call_loss_offset")
-                        tlh_used += tlh_used_here
-                        if (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) < 0:
-                            raise RuntimeError("STRATEGY CONTRACT VIOLATION: tlh_inventory cannot go below zero.")
-                        
-
-                        total_shares_sold_on_call_loss += int(shares_sold)
-
-                        # Log the event with correct mode label
-                        if not exit_reason:
-                            exit_reason = "CLOSE_STOP"
-                            
-                        base_log = (
-                            f"mode={mode_label} | reason={reason}\n"
-                            f"px=${current_price:,.2f} | basis=${initial_basis_val:,.2f}"
+                    else:
+                        options_ledger.close_early(
+                            position_id=open_option.position_id,
+                            close_date=date.date(),
+                            close_per_share=close_per_share,
+                            close_reason=exit_reason,
                         )
-                        if strategy_key in ("tax_neutral", "harvest"):
-                            trigger_met = strat_res.get("action") == "SELL" or shares_required > 0
-                            print(f"POST_TRIGGER | trigger_met={trigger_met} | shares_after_trigger={int(shares_sold)}")
-                        else:
-                            print(f"POST_TRIGGER | trigger_met=True | shares_after_trigger={int(shares_sold)}")
-                        
-                        if current_strategy_key in ("tax_neutral", "harvest") and action_str != "NO-SELL":
-                             base_log += f" | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}"
-                        
-                        financials_log = f"opt_loss=${loss_amt:,.0f} | taxes=${taxes_paid:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f}"
-                        
-                        if int(shares_sold) > 0:
-                            rem_cap = max(0, max_shares_per_month - shares_sold_monthly[year_month])
-                            print(f"EXECUTION | shares_executed={int(shares_sold)} | reason=executed")
-                            
-                            log_msg = (
-                                f"{date.date()} | {exit_reason} | {action_str}\n"
-                                f"{base_log}\n"
-                                f"shares_sold={int(shares_sold)} | monthly_cap_remaining={rem_cap}\n"
-                                f"{financials_log}"
-                            )
-                            audit_log.append(log_msg)
-                            
-                        elif shares_required > 0 and int(shares_sold) == 0:
-                            reason = "trigger_block"
-                            if action_str == "SELL" and max(0, max_shares_per_month - shares_sold_monthly[year_month]) == 0:
-                                reason = "cap_limit"
-                            print(f"EXECUTION | shares_executed=0 | reason={reason}")
-                            log_msg = (
-                                f"{date.date()} | {exit_reason} | NO-SELL\n"
-                                f"{base_log}\n"
-                                f"shares_sold=0 | monthly_cap_remaining={max(0, max_shares_per_month - shares_sold_monthly[year_month])}\n"
-                                f"{financials_log}"
-                            )
-                            audit_log.append(log_msg)
-
-                    # Clear option; allow immediate re-entry
-                    if not enable_tlh:
-                        # roll back what we added to TLH in the handler by setting to 0 delta:
-                        # (We keep it simple: do nothing; MVP prefers to always track TLH dollars.)
-                        pass
 
                     open_option = None
-                    last_close_date = date
 
-            # -----------------------------
-            # Step 5: Independent Sell Engine (NEW)
-            # -----------------------------
-            if strategy_key in ("tax_neutral", "harvest") and (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) > 0:
-                gain_per_share = current_price - initial_basis_val
-                trigger_px = initial_basis_val * (1.0 + share_reduction_trigger_pct)
-                trigger_met = current_price >= trigger_px
-                
-                if trigger_met and gain_per_share > 0:
-                    remaining_monthly_capacity = max_shares_per_month - shares_sold_monthly.get(year_month, 0)
-                    if remaining_monthly_capacity > 0 and (current_shares + shares_delta) > 0:
-                        
-                        shares_to_sell = 0
-                        if strategy_key == "harvest":
-                            print(f"[SELL_BLOCKED] | reason=harvest_mode | shares_sold=0")
-                        else:
-                            shares_candidate = min(remaining_monthly_capacity, int(current_shares + shares_delta))
-                            requested_gain = shares_candidate * gain_per_share
-                            if tlh_manager:
-                                response = tlh_manager.request_usage(requested_gain=requested_gain, source="stock_sale")
-                                approved_gain = response["approved_gain"]
-                                shares_to_sell = int(floor(approved_gain / gain_per_share)) if gain_per_share > 0 else 0
-                            else:
-                                max_shares_by_tlh = int(floor((current_tlh_inventory + tlh_delta - tlh_used) / gain_per_share))
-                                shares_to_sell = min(max_shares_by_tlh, shares_candidate)
-                            
-                        # --- STRATEGY CONTRACT GUARDS ---
-                        if shares_to_sell > 0:
-                            if strategy_key == "harvest":
-                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: harvest mode attempted to sell shares.")
-                            if not trigger_met:
-                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: tax-neutral mode attempted to sell shares without trigger_met being True.")
-                        # --------------------------------
-                        
-                        if shares_to_sell > 0:
-                            proceeds = shares_to_sell * current_price
-                            cost = shares_to_sell * initial_basis_val
-                                
-                            realized_gain = max(0.0, proceeds - cost)
-                            
-                            tlh_used_here = min((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)), realized_gain)
-                            if tlh_manager and tlh_used_here > 0:
-                                tlh_manager.consume(tlh_used_here, source="stock_sale")
-                            tlh_used += tlh_used_here
-                            if (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)) < 0:
-                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: tlh_inventory cannot go below zero.")
-                            
-                            shares_delta -= shares_to_sell
-                            if (current_shares + shares_delta) < 0:
-                                raise RuntimeError("STRATEGY CONTRACT VIOLATION: (current_shares + shares_delta) cannot go below zero.")
-                            
-                            shares_sold_monthly[year_month] = shares_sold_monthly.get(year_month, 0) + shares_to_sell
-                            cash_delta += proceeds
-                            realized_stock_gain += realized_gain
-                            
-                            if shares_to_sell > 0:
-                                log_msg = (
-                                    f"{date.date()} | [INDEPENDENT_SELL] | SELL\n"
-                                    f"mode=tax_neutral | reason=global_inventory_trigger\n"
-                                    f"px=${current_price:,.2f} | basis=${initial_basis_val:,.2f} | trigger={share_reduction_trigger_pct:.0%} | trigger_px=${trigger_px:,.2f}\n"
-                                    f"shares_sold={shares_to_sell} | monthly_cap_remaining={max_shares_per_month - shares_sold_monthly[year_month]}\n"
-                                    f"realized_gain=${realized_gain:,.0f} | tlh_used=${tlh_used_here:,.0f} | tlh_inventory=${(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):,.0f}"
-                                )
-                                audit_log.append(log_msg)
-
-            # -----------------------------
-            # Step 6: open a new option
-            # -----------------------------
-            can_open_today = (open_option is None) and ((current_shares + shares_delta) > 0)
-            
-            if can_open_today:
-                # v2: continuous overlay allowed; only blocked by wash-sale cooldown
-                eligible = True
-                
-                if eligible and next_call_allowed_date is not None:
-                    if date < next_call_allowed_date:
-                        eligible = False
-
-                if eligible:
-                    covered_shares = int((current_shares + shares_delta) * (coverage_pct / 100.0))
-                    covered_shares = max(0, min(covered_shares, int(current_shares + shares_delta)))
-
-                    T_open = float(target_dte_days) / 365.0
-                    
-                    raw_strike = self.strike_for_target_delta(
-                        current_price, T_open, self.risk_free_rate, volatility, target_delta=float(target_delta)
-                    )
-                    
-                    min_strike_price = current_price * 1.05
-                    strike_max_delta = self.strike_for_target_delta(
-                        current_price, T_open, self.risk_free_rate, volatility, target_delta=0.35
-                    )
-                    
-                    # Apply Phase 1 constraints: "Move to next strike" until delta <= 0.35 and strike >= 1.05 * price
-                    strike = max(raw_strike, min_strike_price, strike_max_delta)
-
-                    premium_open_per_share = self.black_scholes_call(
-                        current_price, strike, T_open, self.risk_free_rate, volatility
+            # ----------------------------------------------------------
+            # Step 3: Settle any options that expired by date
+            # (handles cases where expiry_date passed without an explicit
+            #  exit_reason firing — e.g. daily cadence skips exact date)
+            # ----------------------------------------------------------
+            expiry_events = options_ledger.evaluate_expirations(
+                current_date=date.date(),
+                current_price=current_price,
+            )
+            for ev in expiry_events:
+                # Keep local open_option in sync
+                if open_option is not None and open_option.position_id == ev.position_id:
+                    open_option = None
+                # Report TLH from date-driven expiry (may differ from early close above)
+                tlh_delta_reported += ev.tlh_delta
+                if ev.tlh_delta > 0:
+                    audit_log.append(
+                        f"{date.date()} | EXPIRE_SETTLED | position={ev.position_id}\n"
+                        f"tlh_delta=${ev.tlh_delta:,.0f} | outcome={ev.outcome.value}\n"
+                        f"NOTE: sell decision deferred to DecisionService"
                     )
 
-                    premium_open_total = premium_open_per_share * float(covered_shares)
+            # ----------------------------------------------------------
+            # Step 4: Open a new covered call
+            # ----------------------------------------------------------
+            can_open = (
+                enable_covered_call
+                and open_option is None
+                and (current_shares + shares_delta) > 0
+                and not options_ledger.has_open_position()
+            )
 
-                    if premium_open_total <= 0:
-                        continue
+            if can_open:
+                if next_call_allowed_date is not None and date < next_call_allowed_date:
+                    can_open = False
 
-                    # Cash inflow at open (v1)
+            if can_open:
+                covered_shares = int((current_shares + shares_delta) * (coverage_pct / 100.0))
+                covered_shares = max(0, min(covered_shares, int(current_shares + shares_delta)))
+
+                T_open        = float(target_dte_days) / 365.0
+                raw_strike    = self.strike_for_target_delta(
+                    current_price, T_open, self.risk_free_rate, volatility, target_delta=float(target_delta)
+                )
+                strike_max_delta = self.strike_for_target_delta(
+                    current_price, T_open, self.risk_free_rate, volatility, target_delta=0.35
+                )
+                # Phase 1 constraints: delta <= 0.35, strike >= 1.05 * price
+                strike = max(raw_strike, current_price * 1.05, strike_max_delta)
+
+                premium_open_per_share = self.black_scholes_call(
+                    current_price, strike, T_open, self.risk_free_rate, volatility
+                )
+                premium_open_total = premium_open_per_share * float(covered_shares)
+
+                if premium_open_total <= 0:
+                    pass  # skip — no premium available
+                else:
+                    # Cash inflow at open (v1 discipline)
                     cash_delta += premium_open_total
 
+                    # Compute calendar expiry date from target DTE
+                    expiry_date = pd.Timestamp(date) + pd.Timedelta(days=target_dte_days)
+
+                    # Write to OptionsLedger (authoritative record)
+                    ledger_pos: OptionPosition = options_ledger.open(
+                        underlying=self.ticker,
+                        strike=float(strike),
+                        written_date=date.date(),
+                        expiry_date=expiry_date.date(),
+                        shares_encumbered=int(covered_shares),
+                        premium_open_per_share=float(premium_open_per_share),
+                    )
+
+                    # Local mirror for sim loop
                     open_option = OptionPos(
-                        open_date=date,
+                        position_id=ledger_pos.position_id,
+                        open_date=pd.Timestamp(date),
+                        expiry_date=expiry_date,
                         dte_open=int(target_dte_days),
                         strike=float(strike),
                         covered_shares=int(covered_shares),
@@ -891,211 +621,103 @@ class StrategyUnwindEngine:
                     )
 
                     audit_log.append(
-                        f"{date.date()} | SELL_CALL | {covered_shares} Shares\n"
-                        f"strike=${strike:,.2f} | premium=${premium_open_total:,.0f} | delta<={0.35}"
+                        f"{date.date()} | SELL_CALL | {covered_shares} shares\n"
+                        f"strike=${strike:,.2f} | premium=${premium_open_total:,.0f} "
+                        f"| expiry={expiry_date.date()} | delta<={0.35}"
                     )
 
-                    
+            # ----------------------------------------------------------
+            # Record time-series (end of step)
+            # ----------------------------------------------------------
+            shares_now    = float(current_shares + shares_delta)
+            stock_value   = current_price * shares_now
+            portfolio_val = stock_value + float(current_cash + cash_delta)
 
-            # -----------------------------
-            # Record time series (end of day)
-            # -----------------------------
-            df.loc[date, "Shares"] = float((current_shares + shares_delta))
-            df.loc[date, "Covered_Shares"] = float(open_option.covered_shares if open_option else 0.0)
-            df.loc[date, "Strike_Price"] = float(open_option.strike if open_option else 0.0)
-            df.loc[date, "Option_Premium"] = float(open_option.premium_open_total if open_option else 0.0)
+            df.loc[date, "Shares"]          = shares_now
+            df.loc[date, "Covered_Shares"]  = float(open_option.covered_shares if open_option else 0.0)
+            df.loc[date, "Strike_Price"]    = float(open_option.strike          if open_option else 0.0)
+            df.loc[date, "Option_Premium"]  = float(open_option.premium_open_total if open_option else 0.0)
+            df.loc[date, "Stock_Value"]     = float(stock_value)
+            df.loc[date, "Stock_PnL"]       = 0.0  # kept for UI compat
+            df.loc[date, "Option_PnL"]      = float(total_realized_option_pnl)
+            df.loc[date, "Cumulative_Taxes"] = 0.0  # taxes computed by orchestrator
+            df.loc[date, "Cash"]            = float(current_cash + cash_delta)
+            df.loc[date, "Portfolio_Value"] = float(portfolio_val)
+            df.loc[date, "Total_PnL"]       = float(portfolio_val - initial_value)
+            df.loc[date, "Option_Mark"]     = float(option_mark)
+            df.loc[date, "Intrinsic"]       = float(intrinsic)
+            df.loc[date, "Extrinsic"]       = float(extrinsic)
+            df.loc[date, "Exit_Reason"]     = str(exit_reason)
 
-            stock_value = current_price * float((current_shares + shares_delta))
-            df.loc[date, "Stock_Value"] = float(stock_value)
-
-            # (We keep Stock_PnL unused/0 in this MVP overlay time series)
-            df.loc[date, "Stock_PnL"] = 0.0
-
-            # Keep v1 behavior: Option_PnL column reflects realized option pnl total (not cash)
-            df.loc[date, "Option_PnL"] = float(total_realized_option_pnl)
-
-            df.loc[date, "Cumulative_Taxes"] = float(cumulative_taxes)
-            df.loc[date, "Cumulative_TLH"] = float((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)))
-            df.loc[date, "Realized_Stock_Gain"] = float(realized_stock_gain)
-
-            portfolio_value = stock_value + float(current_cash + cash_delta)
-            df.loc[date, "Cash"] = float(current_cash + cash_delta)
-            df.loc[date, "Portfolio_Value"] = float(portfolio_value)
-            df.loc[date, "Total_PnL"] = float(portfolio_value - initial_value)
-
-            # Debug option fields
-            df.loc[date, "Option_Mark"] = float(option_mark)
-            df.loc[date, "Intrinsic"] = float(intrinsic)
-            df.loc[date, "Extrinsic"] = float(extrinsic)
-            df.loc[date, "Exit_Reason"] = str(exit_reason)
-
-            prev_price = current_price
-
-        # Forward fill unpopulated rows if simulation exited early
-        if (current_shares + shares_delta) <= 0:
-            df.loc[date:, "Cash"] = float(current_cash + cash_delta)
-            df.loc[date:, "Portfolio_Value"] = float(current_cash + cash_delta)
-            df.loc[date:, "Total_PnL"] = float((current_cash + cash_delta) - initial_value)
-
-        # Summary
-        final_shares = float((current_shares + shares_delta))
-        final_cash = float(current_cash + cash_delta)
-        final_price = float(df["Price"].iloc[-1])
-        final_stock_value = final_shares * final_price
-
-        starting_shares = int(self.initial_shares)
-        starting_price = float(initial_price)
-        final_price = float(df["Price"].iloc[-1])
-
-        total_shares_sold = starting_shares - final_shares
-        remaining_shares = starting_shares - total_shares_sold
-        
-        net_option_cash_flow = float(total_realized_option_pnl)
-        ending_cash = final_cash
-        ending_stock_value = remaining_shares * final_price
-
-        final_portfolio_value = ending_stock_value + ending_cash
-        starting_portfolio_value = (starting_shares * starting_price) + starting_cash
-
-        if starting_portfolio_value > 0:
-            total_return = ((final_portfolio_value - starting_portfolio_value) / starting_portfolio_value) * 100.0
-        else:
-            total_return = 0.0
-
-        print("\n==============================")
-        print("SIMULATION SUMMARY")
-        print("==============================")
-        print()
-        print(f"Starting Shares:        {starting_shares}")
-        print(f"Shares Sold:            {int(total_shares_sold)}")
-        print(f"Remaining Shares:       {int(remaining_shares)}")
-        print()
-        print(f"Starting Price:         ${starting_price:,.2f}")
-        print(f"Final Price:            ${final_price:,.2f}")
-        print()
-        print(f"Starting Cash:          ${starting_cash:,.0f}")
-        print(f"Net Option Cash Flow:   ${net_option_cash_flow:,.0f}")
-        print()
-        print(f"Ending Stock Value:     ${ending_stock_value:,.0f}")
-        print(f"Ending Cash:            ${ending_cash:,.0f}")
-        print()
-        print(f"Final Portfolio Value:  ${final_portfolio_value:,.0f}")
-        print()
-        print(f"Total Return:           {total_return:.2f}%")
-        print()
-        print("==============================\n")
-
-        shares_reduced = int(starting_shares - final_shares)
-
-        tlh_inventory_remaining = (tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used))
-        gain_per_share = final_price - initial_basis_val
-        raw_available_shares = tlh_inventory_remaining / gain_per_share if gain_per_share > 0 else 0.0
-        tax_neutral_shares_available = min(float(remaining_shares), raw_available_shares)
-
-        # STEP 5 - Reconcile TLH Totals
-        if abs(tlh_delta - tlh_used - (tlh_inventory_remaining - current_tlh_inventory)) > 0.01:
-            logger.warning(
-                f"TLH Reconciliation Failed: generated={tlh_delta:.2f} - used={tlh_used:.2f} "
-                f"!= inventory={(tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used)):.2f}"
-            )
-
-        # Compute averages for trade frequency
-        total_years = (df.index[-1] - df.index[0]).days / 365.25
-        trades_per_year = total_trades / total_years if total_years > 0 else 0.0
-        avg_days_in_trade = total_days_in_trade / total_trades if total_trades > 0 else 0.0
+        # ------------------------------------------------------------------
+        # Summary (option-scoped keys only — sell/TLH keys removed)
+        # ------------------------------------------------------------------
+        final_shares    = float(current_shares + shares_delta)
+        final_cash      = float(current_cash + cash_delta)
+        final_price     = float(df["Price"].iloc[-1])
+        starting_price  = float(initial_price)
 
         summary = {
-            "strategy": "Covered Call Overlay (v1: 20Δ/30D + early exits + cash=underlying + trigger tax-neutral reduction)",
-            "initial_shares": int(self.initial_shares),
-            "final_shares": float(final_shares),
-        
-            # v1 discipline outputs
-            "shares_reduced": shares_reduced,
-            "shares_sold_on_call_loss": int(total_shares_sold_on_call_loss),
-            "realized_option_pnl": float(total_realized_option_pnl),
-            "realized_option_loss": float(total_realized_option_loss),
-            
-            # Phase 1: Separate Option Income vs Loss
+            "strategy": "Covered Call Overlay (v2: date-driven expiry, DecisionService sell logic)",
+
+            # Position
+            "initial_shares":  int(self.initial_shares),
+            "final_shares":    float(final_shares),
+            "shares_delta":    float(shares_delta),
+
+            # Option income / loss (CP engine scope)
+            "realized_option_pnl":     float(total_realized_option_pnl),
+            "realized_option_loss":    float(total_realized_option_loss),
             "option_premium_collected": float(option_premium_collected),
-            "option_buyback_cost": float(option_buyback_cost),
-            "option_income": float(option_income),
-            "option_losses": float(option_losses),
-            "net_option_result": float(option_income - option_losses),
-            
-            # Phase 2: Yearly Tax Ledger
+            "option_buyback_cost":     float(option_buyback_cost),
+            "option_income":           float(option_income),
+            "option_losses":           float(option_losses),
+            "net_option_result":       float(option_income - option_losses),
+
+            # TLH reported (not consumed) — orchestrator reads this and
+            # passes it as tlh_delta_this_step into DecisionInput
+            "tlh_delta_reported": float(tlh_delta_reported),
+
+            # Yearly tax ledger (option events only)
             "yearly_tax_ledger": yearly_tax_ledger,
-            
-            # Trade Frequency Metrics
-            "total_trades": total_trades,
-            "trades_per_year": float(trades_per_year),
-            "avg_days_in_trade": float(avg_days_in_trade),
-            
-            "realized_stock_gain": float(realized_stock_gain),
-            "net_option_cash_flow": net_option_cash_flow,
-            
-            # TLH Inventory Mechanics
-            "tax_loss_inventory": float((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used))),
-            "tlh_used": float(tlh_used),
-            "tlh_inventory_remaining": float(tlh_inventory_remaining),
-            "gain_per_share": float(gain_per_share),
-            "tax_neutral_shares_available": float(tax_neutral_shares_available),
-        
-            # valuation
-            "starting_cash": float(starting_cash),
-            "initial_value": float(starting_portfolio_value),
-            "final_stock_value": float(ending_stock_value),
-            "final_cash": float(ending_cash),
-            "final_portfolio_value": float(final_portfolio_value),
-            "total_return_pct": float(total_return),
-        
-            "cash_balance": float(ending_cash),
-            "total_pnl": float(final_portfolio_value - starting_portfolio_value),
-            "ending_price": float(current_price),
-            "starting_price": float(initial_price),
-            "tlh_delta": float(tlh_delta),
-            "tlh_used": float(tlh_used),
-            "option_pnl": float(option_pnl),
-            "cash_delta": float(cash_delta),
-            "shares_delta": float(shares_delta),
-            "capital_generated": float(cash_delta),
-        
-            # config echo (locked v1)
-            "target_dte_days": int(target_dte_days),
-            "target_delta": float(target_delta),
-            "profit_capture_pct": float(profit_capture_pct),
-            "stop_loss_multiple": float(stop_loss_multiple),
-            "extrinsic_threshold_pct": float(extrinsic_threshold_pct),
-            "coverage_pct": float(coverage_pct),
-            "cash_return_mode": str(cash_return_mode),
-        
-            # UI keys required by Streamlit
-            "final_cash_proceeds": float(final_cash),        # UI uses this key
-            "final_income_cash_balance": float(final_cash),  # optional nicer name
-            "cumulative_taxes": float(cumulative_taxes),
-        
-            # informational
-            "cumulative_tlh": float((tlh_manager.get_remaining() if tlh_manager else (current_tlh_inventory + tlh_delta - tlh_used))),
-        
-            # Basis + trigger echo (MVP)
-            "cost_basis_single_lot": float(initial_basis_val),
-            "share_reduction_trigger_pct": float(share_reduction_trigger_pct),
-            "audit_log": audit_log,
-            
-            "is_option_open": open_option is not None,
-            "open_option_premium": float(open_option.premium_open_total) if open_option else 0.0,
-            "open_option": open_option,
+
+            # Valuation
+            "starting_cash":       float(starting_cash),
+            "initial_value":       float(initial_value),
+            "final_cash":          float(final_cash),
+            "ending_price":        float(final_price),
+            "starting_price":      float(starting_price),
+            "cash_delta":          float(cash_delta),
+
+            # Option config echo
+            "target_dte_days":          int(target_dte_days),
+            "target_delta":             float(target_delta),
+            "profit_capture_pct":       float(profit_capture_pct),
+            "stop_loss_multiple":       float(stop_loss_multiple),
+            "extrinsic_threshold_pct":  float(extrinsic_threshold_pct),
+            "coverage_pct":             float(coverage_pct),
+            "cash_return_mode":         str(cash_return_mode),
+
+            # UI keys
+            "final_cash_proceeds":     float(final_cash),
+            "final_income_cash_balance": float(final_cash),
+
+            # Open option state (for next orchestrator step)
+            "is_option_open":        open_option is not None,
+            "open_option_premium":   float(open_option.premium_open_total) if open_option else 0.0,
+            "open_option":           open_option,
             "next_call_allowed_date": next_call_allowed_date,
-        
-            # Debug (safe)
-            "__debug_code_fingerprint__": "FINGERPRINT_2026_02_23_A",
-            "__debug_trigger__": float(share_reduction_trigger_pct),
+
+            # Audit
+            "audit_log": audit_log,
         }
+
         return {"time_series": df.reset_index(), "summary": summary}
 
 
-# -----------------------------
-# Comparison runner
-# -----------------------------
+# ---------------------------------------------------------------------------
+# Comparison runner (backward-compatible entry point)
+# ---------------------------------------------------------------------------
 
 def run_strategy_comparison(
     ticker: str,
@@ -1109,52 +731,39 @@ def run_strategy_comparison(
     enable_tax_loss_harvest: bool = True,
     position_reduction_pct_per_quarter: float = 0.0,
     reduction_threshold_pct: Optional[float] = None,
-
     max_shares_per_month: int = 200,
     share_reduction_trigger_pct: float = 0.10,
     strategy_mode: str = "harvest",
     cost_basis: Optional[float] = None,
     wash_sale_cooldown_days: int = 0,
-
-    # LEGACY (Streamlit still passes these; accepted for backward compatibility)
+    # Legacy args accepted for backward compat but not used
     sell_shares_on_call_loss: bool = False,
     sell_shares_on_call_loss_pct: float = 0.0,
     min_call_loss_to_trigger: float = 0.0,
 ) -> Dict[str, Any]:
-    # (legacy args are intentionally ignored in the new trigger-based engine)
     _ = (sell_shares_on_call_loss, sell_shares_on_call_loss_pct, min_call_loss_to_trigger)
 
-    engine = StrategyUnwindEngine(
-        ticker=ticker,
-        start_date=start_date,
-        end_date=end_date,
-        initial_shares=initial_shares,
-    )
-
-    baseline = engine.run_baseline()
+    engine         = StrategyUnwindEngine(ticker=ticker, start_date=start_date, end_date=end_date, initial_shares=initial_shares)
+    options_ledger = OptionsLedger(underlying=ticker)
+    baseline       = engine.run_baseline()
 
     overlay = engine.run_covered_call_overlay(
-        call_moneyness_pct=call_moneyness_pct,
-        dte_days=dte_days,
-        roll_frequency_days=roll_frequency_days,
+        options_ledger=options_ledger,
         coverage_pct=coverage_pct,
-        enable_tlh=enable_tax_loss_harvest,
+        target_dte_days=dte_days,
         position_reduction_pct_per_quarter=position_reduction_pct_per_quarter,
         reduction_threshold_pct=reduction_threshold_pct,
-        share_reduction_trigger_pct=share_reduction_trigger_pct,
         cost_basis=cost_basis,
         wash_sale_cooldown_days=wash_sale_cooldown_days,
     )
 
     overlay_summary = overlay.get("summary", {})
-    overlay_summary["__engine_version__"] = "V1_OVERLAY_ENGINE_REWRITE_TRIGGER_TAXNEUTRAL_SINGLELOT"
-    
-
+    overlay_summary["__engine_version__"] = "V2_DECISION_SERVICE_DECOUPLED"
 
     return {
-        "baseline": baseline,
-        "overlay": overlay,
-        "ticker": ticker,
+        "baseline":   baseline,
+        "overlay":    overlay,
+        "ticker":     ticker,
         "start_date": start_date,
-        "end_date": end_date,
+        "end_date":   end_date,
     }
