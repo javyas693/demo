@@ -1,28 +1,59 @@
-from typing import Dict, Any, List, Optional
+"""
+portfolio_orchestrator.py
+ai_advisory/orchestration/portfolio_orchestrator.py
+
+Pure capital router. Reads DecisionResult, emits trade intents.
+No sizing logic. No sell decisions. No TLH inventory management.
+
+Architecture contract (DecisionService_Spec §2 + Architecture Contract v2):
+  Flow: ClientProfile + PortfolioState
+          → Signal Engine          (raw signal values, no decisions)
+          → Decision Service       (all sell/hold/unwind logic)
+          → Orchestrator           (capital routing only — this file)
+          → CP Engine              (covered call overlay + OptionsLedger writes)
+          → Execution Layer        (trade intents → ledger)
+
+Orchestrator step sequence (every cycle):
+  1. Generate signals
+  2. Build DecisionInput (free_shares from OptionsLedger, tlh_delta from CP engine)
+  3. DecisionService.evaluate() → DecisionResult
+  4. Emit sell trade intent if enable_unwind
+  5. Route released capital → income / model sleeves
+  6. Log decision_trace
+"""
+
+from __future__ import annotations
+
+import copy
 from datetime import datetime, date as _date
+from typing import Any, Dict, List, Optional
 
 from ai_advisory.portfolio.portfolio_state import PortfolioState
 from ai_advisory.strategy.strategy_unwind import StrategyUnwindEngine
+from ai_advisory.strategy.options_ledger import OptionsLedger
 from ai_advisory.strategy.anchor_income import AnchorIncomeEngine
 from ai_advisory.services.portfolio_analytics import run_mp_backtest
+from ai_advisory.services.decision_service import (
+    DecisionService,
+    DecisionInput,
+    ClientConstraint,
+    SignalInput,
+    UnwindParams,
+)
 from ai_advisory.orchestration.trace_logger import trace_log
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Frontier weight lookup
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Frontier weight lookup (unchanged)
+# ---------------------------------------------------------------------------
 
 _FRONTIER_STORE_ROOT = "data/frontiers"
+
 
 def _get_frontier_weights(
     risk_score: int,
     as_of: Optional[str] = None,
     model_id: str = "core",
 ) -> Dict[str, float]:
-    """
-    Retrieve target weights for a given risk_score from the persisted frontier.
-    Builds the frontier on the fly if none exists for the given as_of date.
-    Returns dict of {ticker: weight} summing to 1.0.
-    """
     from ai_advisory.frontier.store.fs_store import FileSystemFrontierStore
     from ai_advisory.frontier.trade_flow_compat import weights_for_risk_score
 
@@ -47,7 +78,6 @@ def _get_frontier_weights(
 
 
 def _build_and_store_frontier(store, as_of: str, model_id: str) -> None:
-    """Build frontier from live yfinance data and persist to store."""
     import os
     from ai_advisory.frontier.engine import build_frontier_from_config
     from ai_advisory.frontier.spec import FrontierSpec, UniverseSpec, ConstraintsSpec
@@ -75,109 +105,198 @@ def _build_and_store_frontier(store, as_of: str, model_id: str) -> None:
     except Exception as e:
         trace_log(f"[FRONTIER] Build error: {e}")
 
+
+# ---------------------------------------------------------------------------
+# PortfolioOrchestrator
+# ---------------------------------------------------------------------------
+
 class PortfolioOrchestrator:
     """
-    Master controller that sits exactly one level above the specialized engines.
-    It does not recreate their math; it purely governs capital flow between them.
+    Pure capital router. Sits one level above the specialized engines.
+    Does not recreate their math; governs capital flow between them.
+
+    Responsibilities:
+      - De-risk scoring and unwind parameter mapping
+      - Signal → DecisionInput assembly
+      - Reading DecisionResult and emitting trade intents
+      - Routing released capital to income / model sleeves
+      - Decision logging
+
+    Non-responsibilities:
+      - Sell sizing (DecisionService)
+      - TLH inventory tracking (DecisionService)
+      - Option lifecycle (CP engine + OptionsLedger)
+      - Portfolio state mutation (Execution Layer)
     """
+
     def __init__(self, state: PortfolioState, income_preference: float = 50.0):
         self.state = state
         self.income_preference = income_preference
         self.decision_log: List[Dict[str, Any]] = []
-        
-    def _log_decision(self, event: str, details: Dict[str, Any]):
-        """Append a structured trace log mapping the causal sequence of orchestrator routing."""
+
+    def _log_decision(self, event: str, details: Dict[str, Any]) -> None:
         trace_log(f"--- [MODULE 4] LEDGER/EVENT TRACE: {event} ---")
         if event == "ORCHESTRATION_CYCLE_COMPLETE":
             trace_log("Trades explicitly handled via execution_layer.execute_trades")
         self.decision_log.append({
             "timestamp": datetime.now().isoformat(),
             "event": event,
-            "details": details
+            "details": details,
         })
 
     def determine_de_risk_score(self) -> float:
         """
-        TASK 4: De-risk scoring layer
-        Calculates how heavily to hit the un-wind engine based on Risk Score and Concentration.
+        De-risk scoring layer.
+        Higher risk score = lower desire to unwind quickly.
+        Lower risk score = higher desire to unwind an outsized concentrated position.
         """
-        # A simple deterministic rule: Higher risk score = lower desire to unwind quickly
-        # Lower risk score = higher desire to unwind an outsized concentrated position
-        
-        base_urgency = self.state.concentration_pct * 100.0  # 80% concentration = 80 urgency
-        risk_adjustment = (100.0 - self.state.risk_score) / 100.0  # Risk score 20 = 0.8 multiplier
-        
-        de_risk_score = base_urgency * risk_adjustment
-        
+        base_urgency   = self.state.concentration_pct * 100.0
+        risk_adjustment = (100.0 - self.state.risk_score) / 100.0
+        de_risk_score  = base_urgency * risk_adjustment
+
         self._log_decision("EVALUATE_RISK_POSTURE", {
-            "concentration_pct": round(self.state.concentration_pct, 4),
-            "risk_score_input": self.state.risk_score,
-            "calculated_de_risk_score": round(de_risk_score, 2)
+            "concentration_pct":       round(self.state.concentration_pct, 4),
+            "risk_score_input":        self.state.risk_score,
+            "calculated_de_risk_score": round(de_risk_score, 2),
         })
         return de_risk_score
 
-    def determine_capital_release_params(self, de_risk_score: float, unwind_urgency: float = 0.5) -> Dict[str, Any]:
+    def determine_capital_release_params(
+        self, de_risk_score: float, unwind_urgency: float = 0.5
+    ) -> Dict[str, Any]:
         """
-        TASK 5: Capital Release Strategy Map
-        Maps the de-risk score and unwind urgency into operational unwind parameters.
-
-        unwind_urgency (0–1) from signal engine:
-          - 0.0 = no urgency (bullish momentum, low concentration)
-          - 1.0 = max urgency (bearish momentum, high concentration, risk_off)
+        Maps de-risk score and unwind urgency into UnwindParams values.
+        unwind_urgency (0–1) from signal engine.
         """
-        # Trigger: lower threshold = more aggressive selling
-        # At urgency=0: trigger requires 30-40% gain before selling
-        # At urgency=1: trigger is 5% gain (sell almost immediately)
         base_trigger = max(0.05, 0.40 - (de_risk_score / 200.0))
-        trigger_pct  = base_trigger * (1.0 - unwind_urgency * 0.7)  # compress by up to 70%
-        trigger_pct  = max(0.05, trigger_pct)
+        trigger_pct  = max(0.05, base_trigger * (1.0 - unwind_urgency * 0.7))
 
-        # Max shares per month scales with urgency
         if de_risk_score < 40 and unwind_urgency < 0.3:
-            max_shares = 200       # low urgency, low risk score
+            max_shares = 200
         elif unwind_urgency > 0.7 or de_risk_score > 70:
-            max_shares = 750       # high urgency — accelerate unwind
+            max_shares = 750
         else:
-            max_shares = 400       # mid range
-        
+            max_shares = 400
+
         params = {
-            "strategy_mode": "tax_neutral",
-            "enable_tax_loss_harvest": True,
             "share_reduction_trigger_pct": trigger_pct,
-            "max_shares_per_month": max_shares,
+            "max_shares_per_month":        max_shares,
         }
         self._log_decision("MAP_UNWIND_PARAMS", {
-            "de_risk_score":    round(de_risk_score, 2),
-            "unwind_urgency":   round(unwind_urgency, 3),
-            "trigger_pct":      round(trigger_pct, 4),
-            "max_shares":       max_shares,
-            "mapped_params":    params,
+            "de_risk_score":  round(de_risk_score, 2),
+            "unwind_urgency": round(unwind_urgency, 3),
+            "trigger_pct":    round(trigger_pct, 4),
+            "max_shares":     max_shares,
+            "mapped_params":  params,
         })
         return params
 
     def determine_allocations(self, released_cash: float) -> Dict[str, float]:
-        """
-        TASK 7: Allocation Decision
-        Deterministic split based strictly on user preference vectors.
-        """
-        income_weight = self.income_preference / 100.0
-        model_weight = 1.0 - income_weight
-        
-        alloc_to_income = released_cash * income_weight
-        alloc_to_model = released_cash * model_weight
-        
-        self._log_decision("SPLIT_RELEASED_CAPITAL", {
-            "released_cash": released_cash,
-            "income_preference_pct": self.income_preference,
-            "allocation_to_income": alloc_to_income,
-            "allocation_to_model": alloc_to_model
-        })
-        
-        return {
-            "income": alloc_to_income,
-            "model": alloc_to_model
-        }
+        """Deterministic split based on income preference."""
+        income_weight  = self.income_preference / 100.0
+        alloc_income   = released_cash * income_weight
+        alloc_model    = released_cash * (1.0 - income_weight)
 
+        self._log_decision("SPLIT_RELEASED_CAPITAL", {
+            "released_cash":        released_cash,
+            "income_preference_pct": self.income_preference,
+            "allocation_to_income": alloc_income,
+            "allocation_to_model":  alloc_model,
+        })
+        return {"income": alloc_income, "model": alloc_model}
+
+    def _build_signals(self, signals: Dict[str, Any]) -> List[SignalInput]:
+        """
+        Convert raw signal dict from signal_engine into typed SignalInput list
+        for DecisionService.
+
+        Signal engine output keys (frozen contract in signal_engine.py):
+          momentum_score  : float  [-1.0, 1.0]
+          macro_regime    : str    "risk_on" | "neutral" | "risk_off"
+          volatility_level: str    "low" | "medium" | "high"
+          unwind_urgency  : float  [0.0, 1.0]
+
+        Mapping to numeric SignalInput:
+          momentum_score  → raw float, threshold=0.5, direction="below"
+                            (pass if momentum <= 0.5 — not strongly bullish)
+          macro_regime    → encoded: risk_on=1.0, neutral=0.5, risk_off=0.0
+                            threshold=0.6, direction="below"
+                            (pass if not risk_on; risk_on blocks unwind)
+          volatility_level → encoded: low=0.2, medium=0.5, high=1.0
+                            threshold=0.8, direction="below"
+                            (pass unless high vol)
+        """
+        signal_inputs: List[SignalInput] = []
+
+        # ── Momentum ──────────────────────────────────────────────────
+        momentum = signals.get("momentum_score")
+        if momentum is not None:
+            momentum = float(momentum)
+            signal_inputs.append(SignalInput(
+                signal_name="momentum",
+                raw_value=momentum,
+                threshold=0.5,
+                direction="below",
+                note=(
+                    f"Momentum {momentum:.3f} — "
+                    + ("allowing unwind." if momentum <= 0.5 else "strongly bullish, protecting upside.")
+                ),
+            ))
+
+        # ── Macro regime ──────────────────────────────────────────────
+        # signal_engine returns a string; encode to float for DecisionService
+        macro_regime = signals.get("macro_regime")
+        if macro_regime is not None:
+            macro_score = {"risk_on": 1.0, "neutral": 0.5, "risk_off": 0.0}.get(
+                str(macro_regime), 0.5
+            )
+            signal_inputs.append(SignalInput(
+                signal_name="macro",
+                raw_value=macro_score,
+                threshold=0.6,   # block only when risk_on (1.0 > 0.6)
+                direction="below",
+                note=(
+                    f"Macro regime '{macro_regime}' (encoded={macro_score:.1f}) — "
+                    + ("risk-on, blocking unwind." if macro_score > 0.6 else "allowing unwind.")
+                ),
+            ))
+
+        # ── Volatility ────────────────────────────────────────────────
+        # signal_engine returns a string; encode to float for DecisionService
+        vol_level = signals.get("volatility_level")
+        if vol_level is not None:
+            vol_score = {"low": 0.2, "medium": 0.5, "high": 1.0}.get(
+                str(vol_level), 0.5
+            )
+            signal_inputs.append(SignalInput(
+                signal_name="volatility",
+                raw_value=vol_score,
+                threshold=0.8,   # block only when high (1.0 > 0.8)
+                direction="below",
+                note=(
+                    f"Volatility '{vol_level}' (encoded={vol_score:.1f}) — "
+                    + ("extreme vol, blocking unwind." if vol_score > 0.8 else "acceptable.")
+                ),
+            ))
+
+        return signal_inputs
+
+    def _resolve_client_constraint(self) -> ClientConstraint:
+        """
+        Map PortfolioState client constraint string to ClientConstraint enum.
+        Defaults to SELL_OPTIONAL if not set or unrecognised.
+        """
+        raw = getattr(self.state, "client_constraint", "SELL_OPTIONAL")
+        try:
+            return ClientConstraint(raw)
+        except ValueError:
+            trace_log(f"[ORCHESTRATOR] Unknown client_constraint='{raw}', defaulting to SELL_OPTIONAL")
+            return ClientConstraint.SELL_OPTIONAL
+
+
+# ---------------------------------------------------------------------------
+# Main orchestrator entrypoint
+# ---------------------------------------------------------------------------
 
 def run_portfolio_cycle(
     state: PortfolioState,
@@ -189,204 +308,261 @@ def run_portfolio_cycle(
     income_preference: float = 50.0,
     prices: Dict[str, float] = None,
     available_cash: float = None,
-    month: int = 0
+    month: int = 0,
 ) -> Dict[str, Any]:
     """
-    TASK 3: Main Orchestrator Entrypoint executing the required Sequential Logic Flow (Task 9).
-    TASK 10: Consolidated Output Schema.
+    Main orchestrator entrypoint. Sequential logic flow:
+
+      1. Initialize orchestrator + OptionsLedger
+      2. Generate signals
+      3. Run CP engine (covered call overlay → option events → tlh_delta_reported)
+      4. Mark open positions for UI
+      5. Build DecisionInput from CP engine output + OptionsLedger state
+      6. DecisionService.evaluate() → DecisionResult
+      7. Emit sell trade intent if enable_unwind
+      8. Route released capital → income / model sleeves
+      9. Emit buy intents
+     10. Log and return
+
+    State mutation: NONE. All portfolio changes are emitted as trade intents
+    for the Execution Layer. (Architecture Contract v2.)
     """
     prices = prices or {}
-    trades = []
-    
-    # 1. INITIALIZE GLOBAL ORCHESTRATOR
-    orch = PortfolioOrchestrator(state, income_preference)
-    
-    # GENERATE SIGNALS (with real price history for momentum)
+    trades: List[Dict[str, Any]] = []
+
+    # ------------------------------------------------------------------
+    # 1. Initialize
+    # ------------------------------------------------------------------
+    orch           = PortfolioOrchestrator(state, income_preference)
+    options_ledger = OptionsLedger(underlying=ticker)
+
+    # Restore open option state from PortfolioState if present
+    # (allows OptionsLedger to survive across monthly steps)
+    existing_open_option = getattr(state, "open_option", None)
+    if existing_open_option is not None:
+        try:
+            import pandas as pd
+            options_ledger.open(
+                underlying=ticker,
+                strike=float(existing_open_option.strike),
+                written_date=existing_open_option.open_date.date()
+                    if hasattr(existing_open_option.open_date, 'date')
+                    else existing_open_option.open_date,
+                expiry_date=existing_open_option.expiry_date.date()
+                    if hasattr(existing_open_option.expiry_date, 'date')
+                    else existing_open_option.expiry_date,
+                shares_encumbered=int(existing_open_option.covered_shares),
+                premium_open_per_share=float(existing_open_option.premium_open_per_share),
+                position_id=getattr(existing_open_option, "position_id", None),
+            )
+        except Exception as e:
+            trace_log(f"[ORCHESTRATOR] Could not restore open option to ledger: {e}")
+
+    # ------------------------------------------------------------------
+    # 2. Generate signals
+    # ------------------------------------------------------------------
     from ai_advisory.signals.signal_engine import generate_signals
-    price_history = prices.get("__cp_history__", None)  # injected by time_simulator when available
-    signals = generate_signals(state, prices, price_history=price_history)
+    price_history = prices.get("__cp_history__", None)
+    signals       = generate_signals(state, prices, price_history=price_history)
 
-    # 2. EVALUATE CONTINUOUS OVERLAYS
-    concentration_threshold = 0.15
-    tlh_min_threshold       = 1_000.0   # need at least $1k TLH to enable unwind
-    option_is_open          = getattr(state, "open_option", None) is not None
-
-    unrealized_loss = getattr(state, "unrealized_loss", 0.0)
-    tlh_inventory   = getattr(state, "tlh_inventory", 0.0)
-    momentum        = signals.get("momentum_score", 0.0)
-    unwind_urgency  = signals.get("unwind_urgency", 0.0)
-
-    enable_covered_call = True
-
-    # TLH: trigger when unrealized losses exceed threshold OR we have existing inventory
-    enable_tlh = (unrealized_loss > 0.10) or (tlh_inventory > tlh_min_threshold)
-
-    # Intelligent unwind gate — four conditions must align:
-    #   1. Concentration above threshold
-    #   2. TLH inventory available (we need offset capacity to sell tax-efficiently)
-    #   3. Momentum not strongly bullish (don't force-sell into a rising stock)
-    #   4. No open covered call this period (call premium is working; let it run)
-    concentrated_enough = state.concentration_pct > concentration_threshold
-    has_tlh_capacity    = tlh_inventory >= tlh_min_threshold
-    momentum_allows     = momentum < 0.5    # sell unless strongly bullish (>0.5)
-    call_not_blocking   = not option_is_open  # don't unwind same period as collecting premium
-
-    enable_unwind = concentrated_enough and has_tlh_capacity and momentum_allows and call_not_blocking
-
-    trace_log(f"[UNWIND DECISION]")
-    trace_log(f"concentrated_enough: {concentrated_enough} ({state.concentration_pct*100:.1f}% > {concentration_threshold*100:.0f}%)")
-    trace_log(f"has_tlh_capacity: {has_tlh_capacity} (inventory={tlh_inventory:.0f})")
-    trace_log(f"momentum_allows: {momentum_allows} (score={momentum:.3f})")
-    trace_log(f"call_not_blocking: {call_not_blocking}")
-    
-    trace_log("[CP OVERLAY STATUS]")
-    trace_log(f"covered_call_active: {enable_covered_call}")
-    trace_log(f"tlh_triggered: {enable_tlh}")
-    trace_log(f"unwind_triggered: {enable_unwind}")
-    trace_log(f"unwind_urgency: {unwind_urgency:.3f}")
-    
-    # Capital release rate mapping — urgency now drives both trigger and share cap
+    unwind_urgency = signals.get("unwind_urgency", 0.0)
     de_risk_score  = orch.determine_de_risk_score()
     unwind_params  = orch.determine_capital_release_params(de_risk_score, unwind_urgency)
-    
-    # 2. THE CONCENTRATED POSITION OVERLAYS INVOCATION
+
+    # ------------------------------------------------------------------
+    # 3. CP engine — covered call overlay only
+    # ------------------------------------------------------------------
     trace_log("--- [MODULE 3] STRATEGY CALL TRACE ---")
     trace_log("-> CALLED: CP Strategy Engine (StrategyUnwindEngine.run_covered_call_overlay)")
-    orch._log_decision("INVOKE_CONCENTRATED_ENGINE", {"action": "Start", "initial_shares": initial_shares})
-    
+    orch._log_decision("INVOKE_CONCENTRATED_ENGINE", {
+        "action": "Start", "initial_shares": initial_shares
+    })
+
     cp_engine = StrategyUnwindEngine(
         ticker=ticker,
         start_date=start_date,
         end_date=end_date,
-        initial_shares=initial_shares
+        initial_shares=initial_shares,
     )
-    
-    # The CP engine must only work with TLH it generates this step (tlh_delta).
-    # Pre-existing tlh_inventory is owned by the simulator/ledger — not the engine.
-    # Zeroing it out on the state view enforces the boundary: engine reports what
-    # it generated and consumed; the simulator applies that to the running balance.
-    import copy
-    cp_state_view = copy.copy(state)
-    object.__setattr__(cp_state_view, 'tlh_inventory', 0.0)
 
-    res_cp = cp_engine.run_covered_call_overlay(
-        enable_covered_call=enable_covered_call,
-        enable_tlh=enable_tlh,
-        enable_unwind=enable_unwind,
-        share_reduction_trigger_pct=unwind_params["share_reduction_trigger_pct"],
-        cost_basis=unwind_cost_basis,
+    res_cp     = cp_engine.run_covered_call_overlay(
+        options_ledger=options_ledger,
         coverage_pct=50.0,
         target_dte_days=30,
         target_delta=0.20,
         profit_capture_pct=0.50,
-        max_shares_per_month=unwind_params["max_shares_per_month"],
+        cost_basis=unwind_cost_basis,
         starting_cash=state.cash,
-        initial_state=cp_state_view  # <-- cp_state_view, not state
+        initial_state=state,
     )
-    
     cp_summary = res_cp["summary"]
-    shares_sold = -cp_summary.get("shares_delta", 0.0)
-    updated_shares = state.shares + cp_summary.get("shares_delta", 0.0)
-    
-    ending_price = cp_summary["ending_price"]
-    premium = cp_summary.get("open_option_premium", 0.0)
-    option_pnl = cp_summary.get("option_pnl", 0.0)
-    
-    # 1. APPLY OPTION PREMIUM TO CASH
-    # Immediately after StrategyUnwindEngine returns:
-    # cash_delta += option_premium (Conceptually handled by taking the true cash_delta from the strategy which already contains it, or explicitly passing it)
-    cp_cash_generated = cp_summary.get("cash_delta", 0.0)
-    proceeds_from_sales = cp_cash_generated - (premium + option_pnl)
-    
-    object.__setattr__(state, 'cash', state.cash + premium + option_pnl)
-    
-    tlh_delta = cp_summary.get("tlh_delta", 0.0)
-    tlh_used = cp_summary.get("tlh_used", 0.0)
 
-    
-    # Emit Intent: SELL CP SHARES
-    if shares_sold > 0:
+    # ------------------------------------------------------------------
+    # 4. Mark open positions for UI (after expiry evaluation)
+    # ------------------------------------------------------------------
+    current_price = cp_summary.get("ending_price", 0.0)
+    if current_price > 0 and options_ledger.has_open_position():
+        options_ledger.mark_open_positions(
+            current_price=current_price,
+            volatility=cp_engine.estimate_volatility(),
+            risk_free_rate=cp_engine.risk_free_rate,
+            current_date=_date.today(),
+            bs_call_fn=cp_engine.black_scholes_call,
+        )
+
+    # Snapshot for UI — encumbered shares, marks, DTE
+    ledger_snapshot = options_ledger.state_snapshot(
+        total_shares=int(state.shares),
+        current_date=_date.today(),
+    )
+
+    # ------------------------------------------------------------------
+    # 5. Build DecisionInput
+    #
+    #    free_shares          = OptionsLedger.free_shares() — excludes encumbered
+    #    tlh_delta_this_step  = tlh generated by option events this step
+    #    signals              = typed SignalInput list from signal engine
+    #    client_constraint    = from PortfolioState (NO_SELL / SELL_OPTIONAL / SELL_REQUIRED)
+    # ------------------------------------------------------------------
+    tlh_delta_this_step = cp_summary.get("tlh_delta_reported", 0.0)
+    tlh_inventory       = getattr(state, "tlh_inventory", 0.0)
+    free_shares         = options_ledger.free_shares(int(state.shares))
+
+    signal_inputs       = orch._build_signals(signals)
+    client_constraint   = orch._resolve_client_constraint()
+
+    price_trigger = (
+        unwind_cost_basis * (1.0 + unwind_params["share_reduction_trigger_pct"])
+        if unwind_cost_basis > 0
+        else None
+    )
+
+    decision_input = DecisionInput(
+        shares_held         = int(state.shares),
+        free_shares         = free_shares,
+        cost_basis          = float(unwind_cost_basis),
+        current_price       = float(current_price),
+        tlh_inventory       = float(tlh_inventory),
+        tlh_delta_this_step = float(tlh_delta_this_step),
+        position_pct        = float(state.concentration_pct),
+        client_constraint   = client_constraint,
+        unwind_params       = UnwindParams(
+            max_shares_per_month        = int(unwind_params["max_shares_per_month"]),
+            concentration_threshold_pct = 0.15,
+            price_trigger               = price_trigger,
+        ),
+        signals             = signal_inputs,
+        risk_score          = int(round(state.risk_score)),
+    )
+
+    trace_log("[DECISION INPUT]")
+    trace_log(f"shares_held={decision_input.shares_held} free_shares={free_shares} "
+              f"encumbered={ledger_snapshot['encumbered_shares']}")
+    trace_log(f"tlh_inventory={tlh_inventory:.0f} tlh_delta_this_step={tlh_delta_this_step:.0f} "
+              f"tlh_working={decision_input.tlh_working:.0f}")
+    trace_log(f"client_constraint={client_constraint.value}")
+
+    # ------------------------------------------------------------------
+    # 6. DecisionService.evaluate()
+    # ------------------------------------------------------------------
+    decision_svc    = DecisionService()
+    decision_result = decision_svc.evaluate(decision_input)
+
+    # Consume pending ledger events (clears queue after tlh_delta was read)
+    options_ledger.consume_pending_events()
+
+    trace_log("[DECISION RESULT]")
+    trace_log(f"mode={decision_result.mode.value}")
+    trace_log(f"enable_unwind={decision_result.enable_unwind}")
+    trace_log(f"shares_to_sell={decision_result.shares_to_sell}")
+    if decision_result.blocking_reason:
+        trace_log(f"blocking_reason={decision_result.blocking_reason}")
+
+    orch._log_decision("DECISION_SERVICE_RESULT", {
+        "mode":             decision_result.mode.value,
+        "enable_unwind":    decision_result.enable_unwind,
+        "shares_to_sell":   decision_result.shares_to_sell,
+        "blocking_reason":  decision_result.blocking_reason,
+        "decision_trace":   decision_result.decision_trace,
+    })
+
+    # ------------------------------------------------------------------
+    # 7. Emit sell trade intent
+    # ------------------------------------------------------------------
+    shares_sold      = 0
+    proceeds_from_sales = 0.0
+
+    if decision_result.enable_unwind and decision_result.final_shares > 0:
+        shares_sold = decision_result.final_shares
+        proceeds_from_sales = shares_sold * current_price
+
         trades.append({
-            "symbol": ticker,
-            "side": "SELL",
-            "quantity": shares_sold,
-            "price_override": ending_price # Strategy decided execution price
+            "symbol":         ticker,
+            "side":           "SELL",
+            "quantity":       shares_sold,
+            "price_override": current_price,
         })
+        trace_log(f"[SELL INTENT] {shares_sold} shares @ ${current_price:.2f} = ${proceeds_from_sales:,.0f}")
 
     orch._log_decision("UNWIND_COMPLETE", {
-        "shares_sold": shares_sold,
-        "cash_released_from_liquidation": proceeds_from_sales
+        "shares_sold":                  shares_sold,
+        "cash_released_from_liquidation": proceeds_from_sales,
     })
-    
-    # 3. SPLIT ALLOCATION ROUTING (Task 7)
-    # 2. REMOVE DERIVED CAPITAL
-    # Use state.cash for all allocation logic
-    available_capital = state.cash + proceeds_from_sales
-    allocs = orch.determine_allocations(available_capital)
-    
-    allocation_to_income = allocs['income']
-    allocation_to_model = allocs['model']
-    requested_total = allocation_to_income + allocation_to_model
-    
-    # [CAPITAL CONSTRAINT] MODULE 2: CAP ALLOCATION
-    # 3. FIX EXECUTION FUNDING - Execution must ONLY use: state.cash
-    total_allocatable = available_capital
-    scale_factor = 1.0
 
-    if requested_total > total_allocatable and requested_total > 0:
-        scale_factor = total_allocatable / requested_total
-        allocation_to_income *= scale_factor
-        allocation_to_model *= scale_factor
-    
-    # [CAPITAL CONSTRAINT] MODULE 5: TRACE LOGGING
+    # Option cash flow (premium collected - buyback cost from CP engine)
+    option_income_this_step = cp_summary.get("cash_delta", 0.0)
+
+    # ------------------------------------------------------------------
+    # 8. Route released capital → income / model sleeves
+    # ------------------------------------------------------------------
+    available_capital = state.cash + proceeds_from_sales + option_income_this_step
+    allocs            = orch.determine_allocations(available_capital)
+
+    # Capital constraint: cap allocations to what's actually available
+    requested_total = allocs["income"] + allocs["model"]
+    scale_factor    = 1.0
+    if requested_total > available_capital and requested_total > 0:
+        scale_factor         = available_capital / requested_total
+        allocs["income"]    *= scale_factor
+        allocs["model"]     *= scale_factor
+
     trace_log("[CAPITAL CONSTRAINT]")
     trace_log(f"Month: {month}")
     trace_log(f"Requested: {requested_total:.2f}")
-    trace_log(f"Available: {total_allocatable:.2f}")
+    trace_log(f"Available: {available_capital:.2f}")
     trace_log(f"Scale Factor: {scale_factor:.4f}")
-    
-    # Update allocs dictionary with the capped amounts
-    allocs['income'] = allocation_to_income
-    allocs['model'] = allocation_to_model
-    
-    # 4. EXECUTE ANCHOR INCOME ALLOCATION (Task 8)
-    res_income = None
-    delta_income_value = 0.0
-    inc_res = None
-    income_weights = {}
-    if allocs['income'] > 0.01:
-        trace_log("-> CALLED: Income Strategy Engine (AnchorIncomeEngine.simulate)")
-        orch._log_decision("INVOKE_INCOME_ENGINE", {"capital_injected": allocs['income']})
-        inc_engine = AnchorIncomeEngine(
+
+    # ------------------------------------------------------------------
+    # 9. Emit buy intents — income sleeve
+    # ------------------------------------------------------------------
+    income_weights: Dict[str, float] = {}
+    if allocs["income"] > 0.01:
+        trace_log("-> CALLED: Income Strategy Engine (AnchorIncomeEngine)")
+        orch._log_decision("INVOKE_INCOME_ENGINE", {"capital_injected": allocs["income"]})
+
+        inc_engine     = AnchorIncomeEngine(
             start_date=start_date,
             end_date=end_date,
-            initial_capital=allocs['income'],
-            reinvest_pct=100.0 # Standardize re-investment for compounded pipeline growth
+            initial_capital=allocs["income"],
+            reinvest_pct=100.0,
         )
         income_weights = inc_engine.parking_lot_target_weights
-        
-        # Emit Intents: BUY INCOME ETFS
+
         for t, w in income_weights.items():
             if w > 0.0 and prices.get(t, 0) > 0:
-                qty = (allocs['income'] * w) / prices[t]
                 trades.append({
-                    "symbol": t,
-                    "side": "BUY",
-                    "quantity": qty
+                    "symbol":   t,
+                    "side":     "BUY",
+                    "quantity": (allocs["income"] * w) / prices[t],
                 })
-        
-        # Synthetic simulation removed. Values purely derived in time_simulator.
-        res_income = None
-        inc_res = None
 
-    # 5. EXECUTE MODEL PORTFOLIO ALLOCATION (Task 8)
-    res_mp = None
-    delta_model_value = 0.0
-    mp_res = None
-    model_weights = {}
-    if allocs['model'] > 0.01:
+    # ------------------------------------------------------------------
+    # 9b. Emit buy intents — model portfolio sleeve
+    # ------------------------------------------------------------------
+    model_weights: Dict[str, float] = {}
+    if allocs["model"] > 0.01:
         trace_log("-> CALLED: Model Strategy Engine (frontier portfolio)")
-        orch._log_decision("INVOKE_MODEL_PORTFOLIO_ENGINE", {"capital_injected": allocs['model']})
+        orch._log_decision("INVOKE_MODEL_PORTFOLIO_ENGINE", {"capital_injected": allocs["model"]})
 
         model_weights = _get_frontier_weights(
             risk_score=int(round(state.risk_score)),
@@ -395,69 +571,74 @@ def run_portfolio_cycle(
         )
         trace_log(f"-> Frontier weights: {model_weights}")
 
-        # Emit BUY intents for each frontier holding
         for t, w in model_weights.items():
             if w > 0.0 and prices.get(t, 0) > 0:
-                qty = (allocs['model'] * w) / prices[t]
                 trades.append({
-                    "symbol": t,
-                    "side": "BUY",
-                    "quantity": qty,
+                    "symbol":   t,
+                    "side":     "BUY",
+                    "quantity": (allocs["model"] * w) / prices[t],
                 })
 
-        mp_res = None
-        res_mp = None
-
-    # 6. STRUCTURAL STATE EVOLUTION
-    # Removed direct state mutation. Trades are now emitted as intents for the Execution Layer.
-
+    # ------------------------------------------------------------------
+    # 10. Assemble output
+    # ------------------------------------------------------------------
     orch._log_decision("ORCHESTRATION_CYCLE_COMPLETE", {
-        "capital_released": proceeds_from_sales
+        "capital_released": proceeds_from_sales,
     })
 
-    # Legacy test assumption mapping
-    cp_final = cp_summary.get("final_portfolio_value", 0.0)
-    legacy_eco_value = cp_final
-    
-    purchases = allocs['income'] + allocs['model']
-    # The true cash delta mapping: we've already permanently modified state.cash with premium and pnl
-    # So the remaining delta is just proceeds from sales minus purchases
-    cash_delta = proceeds_from_sales - purchases
+    purchases   = allocs["income"] + allocs["model"]
+    cash_delta  = proceeds_from_sales + option_income_this_step - purchases
 
     orch_summary = {
-        "status": "success",
-        "cash_delta": cash_delta,
-        "capital_released": proceeds_from_sales,
-        "allocation_to_income": allocs['income'],
-        "allocation_to_model": allocs['model'],
-        "income_weights": income_weights,
-        "model_weights": model_weights,
-        "true_final_ecosystem_value": legacy_eco_value, # Backwards compat
-        "tlh_delta": tlh_delta,
-        "tlh_used": tlh_used,
-        "option_pnl": option_pnl
-    }
+        "status":                 "success",
+        "cash_delta":             cash_delta,
+        "capital_released":       proceeds_from_sales,
+        "allocation_to_income":   allocs["income"],
+        "allocation_to_model":    allocs["model"],
+        "income_weights":         income_weights,
+        "model_weights":          model_weights,
+        "true_final_ecosystem_value": cp_summary.get("final_portfolio_value", 0.0),  # compat
 
-    nested_reports = {
-        "concentrated_position": res_cp,
-        "income": inc_res,
-        "model_portfolio": mp_res
+        # DecisionService outputs — readable by UI trace panel
+        "decision_mode":          decision_result.mode.value,
+        "shares_to_sell":         decision_result.final_shares,
+        "enable_unwind":          decision_result.enable_unwind,
+        "blocking_reason":        decision_result.blocking_reason,
+        "decision_trace":         decision_result.decision_trace,
+        "signal_verdicts":        [
+            {
+                "signal":    v.signal_name,
+                "value":     v.raw_value,
+                "threshold": v.threshold,
+                "passed":    v.passed,
+                "note":      v.note,
+            }
+            for v in decision_result.signal_verdicts
+        ],
+
+        # TLH reporting (read-only; inventory managed by DecisionService)
+        "tlh_delta_this_step":    tlh_delta_this_step,
+        "tlh_inventory_prior":    tlh_inventory,
+        "tlh_working":            decision_input.tlh_working,
+
+        # OptionsLedger UI data
+        "ledger_snapshot":        ledger_snapshot,
+        "option_income":          option_income_this_step,
+        "option_pnl":             cp_summary.get("net_option_result", 0.0),
     }
 
     return {
-        "trades": trades,
+        "trades":       trades,
         "orch_summary": orch_summary,
         "decision_log": orch.decision_log,
-        
-        # We pass through the raw nested reports so UI layers can render the details untouched
         "nested_reports": {
             "concentrated_position": res_cp,
-            "income": res_income,
-            "model_portfolio": res_mp
+            "income":                None,
+            "model_portfolio":       None,
         },
         "metadata": {
             "concentrated_position": res_cp,
-            "income": res_income,
-            "model_portfolio": res_mp
-        }
+            "income":                None,
+            "model_portfolio":       None,
+        },
     }

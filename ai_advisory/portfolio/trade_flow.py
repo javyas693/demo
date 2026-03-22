@@ -42,7 +42,8 @@ def propose_from_latest_frontier(
     """
     Read-only selection:
       - uses latest frontier for (as_of, model_id)
-      - selects points_sampled[risk_score]
+      - selects the point corresponding to risk_score from points sorted by
+        vol ascending (idx=0 = min variance, idx=n-1 = max return)
       - returns a proposal suitable for chatbot explanation + trade preview
 
     NOTE: status may be LOCKED (preview ok). Execution requires APPROVED.
@@ -57,16 +58,22 @@ def propose_from_latest_frontier(
     if not fr.points_sampled:
         raise TradeFlowError(f"Frontier {fv} has no sampled points")
 
-    n = len(fr.points_sampled)
-    
-    # Map the UI risk score (1-100) to the available frontier points interpolation indices (0 to n-1)
+    # Sort by vol ascending before indexing — defensive against store
+    # implementations or legacy parquet files that don't guarantee order.
+    # fs_store.get() also sorts, so this is O(n) on an already-sorted list.
+    # Frontier ordering: idx=0 = min variance (risk_score=1),
+    #                    idx=n-1 = max return  (risk_score=100).
+    sorted_points = sorted(fr.points_sampled, key=lambda pt: pt.vol)
+    n = len(sorted_points)
+
+    # Map UI risk score (1-100) to frontier index (0 to n-1)
     bounded_score = max(1, min(100, risk_score))
     if n == 1:
         idx = 0
     else:
         idx = int(round((bounded_score - 1) / 99.0 * (n - 1)))
-        
-    p: FrontierPoint = fr.points_sampled[idx]
+
+    p: FrontierPoint = sorted_points[idx]
 
     # weights can be tuple aligned to fr.assets (fs_store returns tuple)
     if isinstance(p.weights, dict):

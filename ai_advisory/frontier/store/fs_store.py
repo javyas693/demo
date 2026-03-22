@@ -167,8 +167,11 @@ class FileSystemFrontierStore(FrontierStore):
         spec_payload = json.dumps(asdict(result.spec.normalized()), indent=2, sort_keys=True)
         _atomic_write_text(d / "spec.json", spec_payload, encoding="utf-8")
 
-        # --- points (atomic parquet)
-        pts = result.points_sampled
+        # --- points (atomic parquet) — written sorted by vol ascending so
+        # that get() returns points in efficient frontier order without
+        # relying on parquet row order.
+        pts = sorted(result.points_sampled, key=lambda p: p.vol)
+
         points_df = pd.DataFrame(
             [
                 {
@@ -290,6 +293,12 @@ class FileSystemFrontierStore(FrontierStore):
                     sharpe=float(row["sharpe"]) if "sharpe" in row and pd.notna(row["sharpe"]) else None,
                 )
             )
+
+        # Sort by vol ascending: idx=0 = min variance (risk_score=1),
+        # idx=n-1 = max return (risk_score=100).  Defensive against parquet
+        # row order not matching write order (e.g. legacy frontiers written
+        # before put() sorted on write).
+        points.sort(key=lambda p: p.vol)
 
         return FrontierResult(
             spec=spec,
