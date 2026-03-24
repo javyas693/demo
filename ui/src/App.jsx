@@ -163,7 +163,12 @@ export default function App() {
               onClearWhatIf={() => setMonthlyIntelligenceWhatif(null)}
             />
           )}
-          {activeTab === 'projection' && <ProjectionTab onError={setGlobalError} />}
+          {activeTab === 'projection' && (
+            <ProjectionTab
+              simulatedInputs={simulatedInputs}
+              onError={setGlobalError}
+            />
+          )}
         </div>
       </main>
     </div>
