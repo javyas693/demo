@@ -5,7 +5,6 @@ const COLORS = ['#ef4444', '#f59e0b', '#3b82f6'];
 
 export default function ProjectedStatePanel({ state, initialState }) {
   if (!state) return null;
-  console.log("STATE:", state);
 
   // TASK 4: strict flat fields only
   const total = state.total_portfolio_value || 0;

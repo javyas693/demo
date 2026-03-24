@@ -30,6 +30,15 @@ OptionsLedger integration (session contract):
   DecisionInput.tlh_delta_this_step — tlh_delta from OptionsLedger events this step,
                                       forwarded by orchestrator before calling evaluate().
                                       Working TLH = tlh_inventory + tlh_delta_this_step.
+
+gate_overrides (Phase 6):
+  DecisionInput.gate_overrides — dict mapping gate name → "suppress".
+  "suppress" forces passed=True for that gate, bypassing the normal formula.
+  Valid keys: any GATE name that appears in the decision trace
+  (MOMENTUM_GATE, MACRO_GATE, VOLATILITY_GATE, PRICE_TRIGGER_GATE,
+   CONCENTRATION_GATE, TLH_CAPACITY_GATE, UNREALIZED_GAIN_GATE).
+  The override is recorded in the trace for full auditability.
+  Client constraint (CLIENT_CONSTRAINT / NO_SELL) is NEVER overridable.
 """
 
 from __future__ import annotations
@@ -45,22 +54,6 @@ from typing import Any, Dict, List, Optional, TypedDict
 # ---------------------------------------------------------------------------
 
 class TraceEntry(TypedDict, total=False):
-    """
-    One ordered entry in decision_trace.
-
-    Gate entries:
-        rule            str   — rule name, e.g. "MOMENTUM_GATE"
-        value           Any   — actual value evaluated
-        threshold       Any   — threshold compared against
-        passed          bool  — True if the gate allowed the action
-        note            str   — human-readable explanation
-
-    FINAL_DECISION entry (always last):
-        rule            str   — always "FINAL_DECISION"
-        enable_unwind   bool
-        shares_to_sell  int
-        blocking_reason Optional[str]
-    """
     rule:            str
     value:           Any
     threshold:       Any
@@ -76,14 +69,12 @@ class TraceEntry(TypedDict, total=False):
 # ---------------------------------------------------------------------------
 
 class ClientConstraint(str, Enum):
-    """CP Decision Engine Spec v2 §3 — highest-priority constraint."""
-    NO_SELL       = "NO_SELL"        # Never sell shares under any circumstances
-    SELL_OPTIONAL = "SELL_OPTIONAL"  # Engine decides whether to sell
-    SELL_REQUIRED = "SELL_REQUIRED"  # Must attempt selling
+    NO_SELL       = "NO_SELL"
+    SELL_OPTIONAL = "SELL_OPTIONAL"
+    SELL_REQUIRED = "SELL_REQUIRED"
 
 
 class DecisionMode(str, Enum):
-    """CP Decision Engine Spec v2 §4."""
     INCOME_AND_HARVEST = "MODE_1_INCOME_AND_HARVEST"
     TAX_EFFICIENT_SELL = "MODE_2_TAX_EFFICIENT_SELL"
     AGGRESSIVE_UNWIND  = "MODE_3_AGGRESSIVE_UNWIND"
@@ -95,31 +86,21 @@ class DecisionMode(str, Enum):
 
 @dataclass
 class SignalInput:
-    """
-    A single named signal with its raw value and evaluation metadata.
-    Consumed by the engine to produce a SignalVerdict.
-    Signals are independently injectable and overridable (spec §7.3).
-    """
     signal_name: str
     raw_value:   float
     threshold:   float
     weight:      float = 1.0
-    direction:   str   = "below"    # "below" → pass if raw_value <= threshold (e.g. momentum < 0.5)
-                                    # "above" → pass if raw_value >= threshold
-    override:    Optional[bool] = None   # Explicit override; None = use formula
+    direction:   str   = "below"
+    override:    Optional[bool] = None
     note:        Optional[str]  = None
 
 
 @dataclass
 class UnwindParams:
-    """
-    Parameters governing sell quantity limits.
-    Provided by the orchestrator; never derived inside DecisionService.
-    """
-    max_shares_per_month:         int    # Hard ceiling on shares sold per period
-    concentration_threshold_pct:  float  # Gate: sell if position_pct >= this (e.g. 0.15)
-    price_trigger:                Optional[float] = None  # Gate: sell only if current_price >= this
-    urgency_override:             Optional[int]   = None  # 0–100; scales max_shares in Mode 3
+    max_shares_per_month:         int
+    concentration_threshold_pct:  float
+    price_trigger:                Optional[float] = None
+    urgency_override:             Optional[int]   = None
 
 
 @dataclass
@@ -127,25 +108,16 @@ class DecisionInput:
     """
     Full input bundle consumed by DecisionService.evaluate().
 
-    OptionsLedger integration fields:
-        free_shares          OptionsLedger.free_shares(total_shares) — shares not encumbered
-                             by open covered calls. DecisionService uses this as the ceiling
-                             for shares_to_sell, never shares_held directly.
-        tlh_delta_this_step  Sum of tlh_delta from OptionsLedger events settled this step.
-                             Orchestrator reads pending_events(), sums tlh_delta, passes here.
-                             Working TLH = tlh_inventory + tlh_delta_this_step.
+    gate_overrides (Phase 6):
+        Dict mapping gate name to "suppress".
+        Suppressed gates are forced to passed=True and annotated in the trace.
+        CLIENT_CONSTRAINT is never suppressible — it is checked before gate_overrides
+        are consulted and raises ValueError if suppression is attempted.
 
-    Other fields:
-        shares_held          Total shares in the concentrated position (for invariant checks)
-        cost_basis           Per-share cost basis (USD)
-        current_price        Current mark-to-market price (USD)
-        tlh_inventory        Accumulated TLH inventory from prior steps (USD)
-        position_pct         Concentration as fraction of total portfolio (0.0–1.0)
-        client_constraint    Client's sell permission level
-        unwind_params        Sell quantity and trigger parameters
-        signals              Optional list of named signal inputs (e.g. momentum, macro)
-        risk_score           Pre-computed 1–100 score from Risk Engine — never recalculated here
-        extra                Arbitrary pass-through metadata for tracing / replay
+        Example:
+            gate_overrides={"MACRO_GATE": "suppress", "MOMENTUM_GATE": "suppress"}
+
+    All other fields are unchanged from the original contract.
     """
     shares_held:          int
     cost_basis:           float
@@ -154,30 +126,33 @@ class DecisionInput:
     position_pct:         float
     client_constraint:    ClientConstraint
     unwind_params:        UnwindParams
-    free_shares:          int   = 0    # from OptionsLedger.free_shares() — defaults 0 for safety
-    tlh_delta_this_step:  float = 0.0  # from OptionsLedger events this step
+    free_shares:          int   = 0
+    tlh_delta_this_step:  float = 0.0
     signals:              List[SignalInput] = field(default_factory=list)
     risk_score:           Optional[int]    = None
     extra:                Dict[str, Any]   = field(default_factory=dict)
+    # Phase 6 — gate suppression for what-if runs
+    gate_overrides:       Dict[str, str]   = field(default_factory=dict)
 
     @property
     def tlh_working(self) -> float:
-        """
-        Working TLH available for this decision step.
-        tlh_inventory carries prior balance; tlh_delta_this_step adds what was just
-        generated by option events before this evaluation.
-        Never negative — enforced by invariant check.
-        """
         return self.tlh_inventory + self.tlh_delta_this_step
 
     @property
     def sellable_shares(self) -> int:
-        """
-        Shares that can physically be sold this step.
-        = min(shares_held, free_shares)
-        free_shares excludes shares encumbered by open covered calls.
-        """
         return min(self.shares_held, self.free_shares)
+
+    def is_suppressed(self, gate_name: str) -> bool:
+        """
+        Returns True if this gate should be force-passed in a what-if run.
+        CLIENT_CONSTRAINT suppression raises immediately — it is not negotiable.
+        """
+        if gate_name == "CLIENT_CONSTRAINT" and gate_name in self.gate_overrides:
+            raise ValueError(
+                "[INVARIANT] CLIENT_CONSTRAINT cannot be suppressed via gate_overrides. "
+                "This constraint is set by the advisor and is never overridable."
+            )
+        return self.gate_overrides.get(gate_name) == "suppress"
 
 
 # ---------------------------------------------------------------------------
@@ -186,10 +161,6 @@ class DecisionInput:
 
 @dataclass
 class SignalVerdict:
-    """
-    Output record for a single evaluated signal.
-    Rendered as a dial/gauge/bar in the signal dashboard (spec §7.1).
-    """
     signal_name: str
     raw_value:   float
     threshold:   float
@@ -201,37 +172,16 @@ class SignalVerdict:
 
 @dataclass
 class DecisionResult:
-    """
-    Output of DecisionService.evaluate().
-
-    Contract (Strategy Execution Contract):
-        - This is a TRADE INTENT, not an executed trade.
-        - Portfolio state is NEVER mutated here.
-        - Orchestrator reads final_shares and emits trade intents to the trade engine.
-
-    Fields:
-        enable_unwind            True if any selling should be attempted
-        shares_to_sell           Recommended shares (== final_shares, spec §3.2 name)
-        final_shares             Spec §3.2 field — always equals shares_to_sell
-        mode                     Decision mode selected
-        tlh_constrained_max      Max shares TLH can offset (Mode 2 only; None in Mode 1/3)
-        urgency_constrained_max  max_shares_per_month ceiling applied
-        signal_verdicts          Per-signal evaluation results
-        decision_trace           Ordered list of TraceEntry dicts (spec §4 schema)
-                                 Last entry is always FINAL_DECISION.
-        blocking_reason          Set when enable_unwind=False
-        what_if                  Reserved for §7.3 counterfactual replay; always None for now
-    """
     enable_unwind:           bool
     shares_to_sell:          int
-    final_shares:            int          # spec §3.2 alias — always == shares_to_sell
+    final_shares:            int
     mode:                    DecisionMode
     tlh_constrained_max:     Optional[int]
     urgency_constrained_max: int
     signal_verdicts:         List[SignalVerdict]
     decision_trace:          List[TraceEntry]
     blocking_reason:         Optional[str]
-    what_if:                 Optional[Dict[str, Any]] = None   # spec §3.2 future field
+    what_if:                 Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -242,20 +192,12 @@ class DecisionService:
     """
     Deterministic decision engine for concentrated position management.
 
-    Responsibilities:
-        1. Validate inputs and enforce system invariants
-        2. Evaluate all signals independently → signal_verdicts
-        3. Select the correct decision mode (Mode 1 / 2 / 3)
-        4. Compute shares_to_sell, enforcing free_shares ceiling from OptionsLedger
-        5. Produce a fully auditable DecisionResult with decision_trace
+    Phase 6 addition: gate_overrides on DecisionInput.
+    When a gate name is in gate_overrides with value "suppress", the gate is
+    force-passed regardless of the actual signal/value. The override is recorded
+    in the trace so every what-if run is fully auditable.
 
-    Non-responsibilities (by contract):
-        - CP engine covered-call overlay logic
-        - Portfolio state mutation
-        - TLH generation (CP engine / OptionsLedger reports tlh_delta; we consume it)
-        - Risk score calculation (Risk Engine's domain)
-        - Trade execution (trade engine + ledger)
-        - OptionsLedger position tracking (OptionsLedger's domain)
+    CLIENT_CONSTRAINT is never suppressible. All system invariants still apply.
     """
 
     # ------------------------------------------------------------------
@@ -264,12 +206,10 @@ class DecisionService:
 
     @staticmethod
     def _gate(rule: str, value: Any, threshold: Any, passed: bool, note: str) -> TraceEntry:
-        """Build a gate-style TraceEntry (spec §4 schema)."""
         return TraceEntry(rule=rule, value=value, threshold=threshold, passed=passed, note=note)
 
     @staticmethod
     def _final(enable_unwind: bool, shares_to_sell: int, blocking_reason: Optional[str]) -> TraceEntry:
-        """Build the closing FINAL_DECISION TraceEntry (always last in trace)."""
         return TraceEntry(
             rule="FINAL_DECISION",
             enable_unwind=enable_unwind,
@@ -278,24 +218,57 @@ class DecisionService:
         )
 
     # ------------------------------------------------------------------
+    # Gate suppression helper
+    # ------------------------------------------------------------------
+
+    def _maybe_suppress(
+        self,
+        inp: DecisionInput,
+        gate_name: str,
+        natural_result: bool,
+        natural_note: str,
+        trace: List[TraceEntry],
+        value: Any = None,
+        threshold: Any = None,
+    ) -> bool:
+        """
+        Apply gate_override suppression if configured, otherwise use natural result.
+
+        If suppressed:
+          - passed is forced True
+          - trace note is annotated with [WHAT-IF SUPPRESSED] so it's visible in the UI
+        If not suppressed:
+          - trace entry is written with natural result and note
+          - natural_result is returned unchanged
+
+        Returns the effective passed value.
+        """
+        if inp.is_suppressed(gate_name):
+            trace.append(self._gate(
+                rule=gate_name,
+                value=value,
+                threshold=threshold,
+                passed=True,
+                note=f"[WHAT-IF SUPPRESSED] Gate forced open. Original result would have been: {natural_note}",
+            ))
+            return True
+
+        trace.append(self._gate(
+            rule=gate_name,
+            value=value,
+            threshold=threshold,
+            passed=natural_result,
+            note=natural_note,
+        ))
+        return natural_result
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def evaluate(self, inp: DecisionInput) -> DecisionResult:
-        """
-        Main entry point.  Deterministic: identical inputs → identical output.
-
-        Processing order (CP Decision Engine Spec v2 §8 flow):
-            1.  Record input snapshot for deterministic replay
-            2.  Validate inputs and enforce invariants
-            3.  Evaluate signals → signal_verdicts
-            4.  Select decision mode
-            5.  Apply mode-specific sell logic
-            6.  Return DecisionResult (inp is never mutated)
-        """
         trace: List[TraceEntry] = []
 
-        # Input snapshot — full replay fidelity (spec §9 determinism requirement)
         trace.append(self._gate(
             rule="INPUT_SNAPSHOT",
             value={
@@ -309,22 +282,17 @@ class DecisionService:
                 "tlh_working":         inp.tlh_working,
                 "position_pct":        inp.position_pct,
                 "client_constraint":   inp.client_constraint.value,
+                "gate_overrides":      inp.gate_overrides,
             },
             threshold=None,
             passed=True,
             note="Raw inputs recorded for deterministic replay.",
         ))
 
-        # Step 1: invariants
         self._assert_invariants(inp, trace)
-
-        # Step 2: signals
-        signal_verdicts = self._evaluate_signals(inp.signals, trace)
-
-        # Step 3: mode selection
+        signal_verdicts = self._evaluate_signals(inp.signals, inp.gate_overrides, trace)
         mode, blocking_signal = self._select_mode(inp, signal_verdicts, trace)
 
-        # Step 4: mode handler
         if mode == DecisionMode.INCOME_AND_HARVEST:
             return self._handle_mode1(inp, mode, signal_verdicts, trace, blocking_signal)
         elif mode == DecisionMode.TAX_EFFICIENT_SELL:
@@ -335,27 +303,17 @@ class DecisionService:
         raise ValueError(f"[FATAL] Unknown decision mode: {mode}")
 
     # ------------------------------------------------------------------
-    # Step 1: Invariant enforcement (CP Spec §10, DecisionService Spec §8)
+    # Step 1: Invariants
     # ------------------------------------------------------------------
 
     def _assert_invariants(self, inp: DecisionInput, trace: List[TraceEntry]) -> None:
-        """
-        Invariants from CP Decision Engine Spec v2 §10:
-            - No negative shares
-            - No negative TLH
-        Additional invariants from DecisionService Spec §8:
-            - free_shares <= shares_held (can't be more free than total)
-            - tlh_working never negative
-        Raises ValueError immediately; engine must not proceed on bad state.
-        """
         if inp.shares_held < 0:
             raise ValueError(f"[INVARIANT] shares_held={inp.shares_held} is negative.")
         if inp.free_shares < 0:
             raise ValueError(f"[INVARIANT] free_shares={inp.free_shares} is negative.")
         if inp.free_shares > inp.shares_held:
             raise ValueError(
-                f"[INVARIANT] free_shares={inp.free_shares} > shares_held={inp.shares_held}. "
-                "OptionsLedger.free_shares() must never exceed total shares."
+                f"[INVARIANT] free_shares={inp.free_shares} > shares_held={inp.shares_held}."
             )
         if inp.tlh_inventory < 0:
             raise ValueError(f"[INVARIANT] tlh_inventory={inp.tlh_inventory:.4f} is negative.")
@@ -381,22 +339,15 @@ class DecisionService:
         ))
 
     # ------------------------------------------------------------------
-    # Step 2: Signal evaluation (spec §7.1)
+    # Step 2: Signal evaluation — now gate_overrides aware
     # ------------------------------------------------------------------
 
     def _evaluate_signals(
         self,
         signals: List[SignalInput],
+        gate_overrides: Dict[str, str],
         trace: List[TraceEntry],
     ) -> List[SignalVerdict]:
-        """
-        Evaluate each signal independently.
-
-        - Overrides take absolute precedence over formula result.
-        - Each signal produces exactly one TraceEntry (e.g. MOMENTUM_GATE).
-        - Verdicts are consumed by _select_mode() to block Mode 2 if any fail.
-        - All verdicts stored in DecisionResult for UI signal dashboard (§7.1).
-        """
         verdicts: List[SignalVerdict] = []
 
         if not signals:
@@ -410,46 +361,60 @@ class DecisionService:
             return verdicts
 
         for sig in signals:
+            gate_name = sig.signal_name.upper().replace(" ", "_") + "_GATE"
+
+            # Natural evaluation
             if sig.override is not None:
-                passed = sig.override
-                note = (
-                    f"OVERRIDE applied: passed={passed} "
+                natural_passed = sig.override
+                natural_note = (
+                    f"OVERRIDE applied: passed={natural_passed} "
                     f"(raw={sig.raw_value:.4f}, threshold={sig.threshold:.4f})"
                 )
             else:
                 if sig.direction == "above":
-                    passed = sig.raw_value >= sig.threshold
+                    natural_passed = sig.raw_value >= sig.threshold
                 elif sig.direction == "below":
-                    passed = sig.raw_value <= sig.threshold
+                    natural_passed = sig.raw_value <= sig.threshold
                 else:
-                    passed = sig.raw_value <= sig.threshold  # default: treat as "below"
+                    natural_passed = sig.raw_value <= sig.threshold
                 direction_symbol = "<=" if sig.direction == "below" else ">="
-                note = (
+                natural_note = (
                     sig.note or
                     f"raw={sig.raw_value:.4f} {direction_symbol} {sig.threshold:.4f} "
-                    f"→ {'PASS' if passed else 'BLOCK'}"
+                    f"→ {'PASS' if natural_passed else 'BLOCK'}"
                 )
 
-            # TraceEntry per signal — matches spec §4 example (MOMENTUM_GATE, etc.)
-            gate_name = sig.signal_name.upper().replace(" ", "_") + "_GATE"
             threshold_label = (
                 f"<= {sig.threshold}"
                 if sig.direction == "below"
                 else f">= {sig.threshold}"
             )
-            trace.append(self._gate(
-                rule=gate_name,
-                value=round(sig.raw_value, 4),
-                threshold=threshold_label,
-                passed=passed,
-                note=note,
-            ))
+
+            # Apply gate suppression if configured — annotates trace with [WHAT-IF SUPPRESSED]
+            if gate_overrides.get(gate_name) == "suppress":
+                effective_passed = True
+                trace.append(self._gate(
+                    rule=gate_name,
+                    value=round(sig.raw_value, 4),
+                    threshold=threshold_label,
+                    passed=True,
+                    note=f"[WHAT-IF SUPPRESSED] Gate forced open. Original result: {natural_note}",
+                ))
+            else:
+                effective_passed = natural_passed
+                trace.append(self._gate(
+                    rule=gate_name,
+                    value=round(sig.raw_value, 4),
+                    threshold=threshold_label,
+                    passed=effective_passed,
+                    note=natural_note,
+                ))
 
             verdicts.append(SignalVerdict(
                 signal_name=sig.signal_name,
                 raw_value=sig.raw_value,
                 threshold=sig.threshold,
-                passed=passed,
+                passed=effective_passed,
                 weight=sig.weight,
                 override=sig.override,
                 note=sig.note,
@@ -467,7 +432,7 @@ class DecisionService:
         return verdicts
 
     # ------------------------------------------------------------------
-    # Step 3: Mode selection
+    # Step 3: Mode selection — structural gates now use _maybe_suppress
     # ------------------------------------------------------------------
 
     def _select_mode(
@@ -476,28 +441,9 @@ class DecisionService:
         signal_verdicts: List[SignalVerdict],
         trace: List[TraceEntry],
     ) -> tuple[DecisionMode, Optional[str]]:
-        """
-        Mode selection (CP Decision Engine Spec v2 §4 + §3 client constraint priority).
-
-        Priority order:
-            1. NO_SELL      → Mode 1, immediately (client constraint is supreme, §3)
-            2. SELL_REQUIRED → Mode 3, immediately (forced unwind)
-            3. SELL_OPTIONAL → evaluate all gates in order:
-                a. Price trigger gate
-                b. Concentration gate
-                c. TLH capacity gate
-                d. Unrealized gain gate
-                e. Signal gates (any failing signal → Mode 1, not Mode 2)
-               All must pass → Mode 2. Any failure → Mode 1.
-
-        Returns:
-            (mode, blocking_signal_name_or_None)
-            blocking_signal is set when a signal is the reason for Mode 1 selection,
-            so the trace FINAL_DECISION entry can name the blocking signal.
-        """
         constraint = inp.client_constraint
 
-        # CLIENT_CONSTRAINT gate — always first (spec §4 example)
+        # CLIENT_CONSTRAINT — never suppressible (checked inside is_suppressed)
         trace.append(self._gate(
             rule="CLIENT_CONSTRAINT",
             value=constraint.value,
@@ -523,7 +469,6 @@ class DecisionService:
             ))
             return DecisionMode.AGGRESSIVE_UNWIND, None
 
-        # SELL_OPTIONAL: evaluate all trigger gates
         assert constraint == ClientConstraint.SELL_OPTIONAL
 
         price_trigger_met = self._eval_price_trigger(inp, trace)
@@ -531,14 +476,11 @@ class DecisionService:
         tlh_met           = self._eval_tlh_capacity(inp, trace)
         gain_met          = self._eval_unrealized_gain(inp, trace)
 
-        # All structural gates must pass before checking signals
         if not (price_trigger_met and concentration_met and tlh_met and gain_met):
             return DecisionMode.INCOME_AND_HARVEST, None
 
-        # Signal gates — each failing signal blocks Mode 2 (spec §4 trace example)
-        # Signals were already evaluated and logged in _evaluate_signals().
-        # Here we check their verdicts for blocking, matching the spec §4 trace:
-        #   MOMENTUM_GATE passes=False → FINAL_DECISION blocking_reason="MOMENTUM_GATE"
+        # Signal verdicts — already evaluated and annotated in _evaluate_signals.
+        # If suppressed there, they will already be passed=True in the verdicts list.
         blocking_signal: Optional[str] = None
         for verdict in signal_verdicts:
             if not verdict.passed:
@@ -551,7 +493,7 @@ class DecisionService:
                     passed=False,
                     note=f"{gate_name} failed — Mode 2 blocked, falling back to Mode 1.",
                 ))
-                break   # first failing signal is the blocking reason (deterministic)
+                break
 
         if blocking_signal:
             return DecisionMode.INCOME_AND_HARVEST, blocking_signal
@@ -559,85 +501,85 @@ class DecisionService:
         return DecisionMode.TAX_EFFICIENT_SELL, None
 
     def _eval_price_trigger(self, inp: DecisionInput, trace: List[TraceEntry]) -> bool:
-        """Spec §7 rule 1: price >= trigger. No trigger configured → gate open."""
         trigger = inp.unwind_params.price_trigger
         if trigger is None:
-            trace.append(self._gate(
-                rule="PRICE_TRIGGER_GATE",
+            return self._maybe_suppress(
+                inp, "PRICE_TRIGGER_GATE",
+                natural_result=True,
+                natural_note="No price trigger configured; gate open.",
+                trace=trace,
                 value=inp.current_price,
                 threshold="not configured",
-                passed=True,
-                note="No price trigger configured; gate open.",
-            ))
-            return True
+            )
         met = inp.current_price >= trigger
-        trace.append(self._gate(
-            rule="PRICE_TRIGGER_GATE",
+        note = (
+            f"Price ${inp.current_price:.4f} >= trigger ${trigger:.4f}."
+            if met else
+            f"Price ${inp.current_price:.4f} below trigger ${trigger:.4f} — gate blocked."
+        )
+        return self._maybe_suppress(
+            inp, "PRICE_TRIGGER_GATE",
+            natural_result=met,
+            natural_note=note,
+            trace=trace,
             value=round(inp.current_price, 4),
             threshold=trigger,
-            passed=met,
-            note=(
-                f"Price ${inp.current_price:.4f} >= trigger ${trigger:.4f}."
-                if met else
-                f"Price ${inp.current_price:.4f} below trigger ${trigger:.4f} — gate blocked."
-            ),
-        ))
-        return met
+        )
 
     def _eval_concentration(self, inp: DecisionInput, trace: List[TraceEntry]) -> bool:
-        """Concentration gate: position_pct >= threshold."""
         passed = inp.position_pct >= inp.unwind_params.concentration_threshold_pct
-        trace.append(self._gate(
-            rule="CONCENTRATION_GATE",
+        note = (
+            f"{inp.position_pct:.1%} concentrated, above "
+            f"{inp.unwind_params.concentration_threshold_pct:.0%} threshold."
+            if passed else
+            f"{inp.position_pct:.1%} concentrated, below "
+            f"{inp.unwind_params.concentration_threshold_pct:.0%} threshold — gate blocked."
+        )
+        return self._maybe_suppress(
+            inp, "CONCENTRATION_GATE",
+            natural_result=passed,
+            natural_note=note,
+            trace=trace,
             value=round(inp.position_pct, 4),
             threshold=inp.unwind_params.concentration_threshold_pct,
-            passed=passed,
-            note=(
-                f"{inp.position_pct:.1%} concentrated, above "
-                f"{inp.unwind_params.concentration_threshold_pct:.0%} threshold."
-                if passed else
-                f"{inp.position_pct:.1%} concentrated, below "
-                f"{inp.unwind_params.concentration_threshold_pct:.0%} threshold — gate blocked."
-            ),
-        ))
-        return passed
+        )
 
     def _eval_tlh_capacity(self, inp: DecisionInput, trace: List[TraceEntry]) -> bool:
-        """TLH capacity gate: working TLH > 0 (spec §7 rule 2)."""
         passed = inp.tlh_working > 0.0
-        trace.append(self._gate(
-            rule="TLH_CAPACITY_GATE",
+        note = (
+            f"TLH working balance ${inp.tlh_working:,.2f} available "
+            f"(inventory={inp.tlh_inventory:.2f} + delta={inp.tlh_delta_this_step:.2f})."
+            if passed else
+            "TLH working balance is zero; tax-neutral sell not possible."
+        )
+        return self._maybe_suppress(
+            inp, "TLH_CAPACITY_GATE",
+            natural_result=passed,
+            natural_note=note,
+            trace=trace,
             value=round(inp.tlh_working, 2),
             threshold="> 0",
-            passed=passed,
-            note=(
-                f"TLH working balance ${inp.tlh_working:,.2f} available "
-                f"(inventory={inp.tlh_inventory:.2f} + delta={inp.tlh_delta_this_step:.2f})."
-                if passed else
-                "TLH working balance is zero; tax-neutral sell not possible."
-            ),
-        ))
-        return passed
+        )
 
     def _eval_unrealized_gain(self, inp: DecisionInput, trace: List[TraceEntry]) -> bool:
-        """Unrealized gain gate: current_price > cost_basis."""
         gain = inp.current_price - inp.cost_basis
         passed = gain > 0
-        trace.append(self._gate(
-            rule="UNREALIZED_GAIN_GATE",
+        note = (
+            f"Unrealized gain ${gain:.4f}/share."
+            if passed else
+            "No unrealized gain; TLH offset not applicable."
+        )
+        return self._maybe_suppress(
+            inp, "UNREALIZED_GAIN_GATE",
+            natural_result=passed,
+            natural_note=note,
+            trace=trace,
             value=round(gain, 4),
             threshold="> 0",
-            passed=passed,
-            note=(
-                f"Unrealized gain ${gain:.4f}/share."
-                if passed else
-                "No unrealized gain; TLH offset not applicable."
-            ),
-        ))
-        return passed
+        )
 
     # ------------------------------------------------------------------
-    # Mode handlers
+    # Mode handlers — unchanged from original
     # ------------------------------------------------------------------
 
     def _handle_mode1(
@@ -648,12 +590,6 @@ class DecisionService:
         trace: List[TraceEntry],
         blocking_signal: Optional[str],
     ) -> DecisionResult:
-        """
-        Mode 1: Income + Harvest.
-        Spec §5 Harvest Strategy: Never sells shares. Generates TLH from option losses.
-        Spec §10 invariant: Harvest never sells.
-        → Case 3: No sell.
-        """
         if blocking_signal:
             reason = (
                 f"Mode 1 active: {blocking_signal} blocked the unwind. "
@@ -665,7 +601,6 @@ class DecisionService:
                 "Sell trigger conditions not met or client does not permit selling."
             )
         trace.append(self._final(enable_unwind=False, shares_to_sell=0, blocking_reason=reason))
-
         return DecisionResult(
             enable_unwind=False,
             shares_to_sell=0,
@@ -685,18 +620,7 @@ class DecisionService:
         signal_verdicts: List[SignalVerdict],
         trace: List[TraceEntry],
     ) -> DecisionResult:
-        """
-        Mode 2: Tax-Efficient Sell.
-        Case 1: Tax-neutral sell.
-            shares_to_sell = min(max_shares_per_month,
-                                 floor(tlh_working / gain_per_share),
-                                 sellable_shares)
-
-        sellable_shares = min(shares_held, free_shares) — enforces OptionsLedger boundary.
-        TLH rules (CP Spec §6): must never double-count; used only to offset gains.
-        """
         gain_per_share = inp.current_price - inp.cost_basis
-
         trace.append(self._gate(
             rule="GAIN_PER_SHARE_CALC",
             value=round(gain_per_share, 4),
@@ -708,7 +632,6 @@ class DecisionService:
             ),
         ))
 
-        # Guard: gain <= 0 — TLH offset irrelevant
         if gain_per_share <= 0:
             reason = (
                 "Mode 2: No unrealized gain per share; TLH offset not applicable. "
@@ -727,7 +650,6 @@ class DecisionService:
                 blocking_reason=reason,
             )
 
-        # Case 1 formula: TLH-constrained max (spec §5 Case 1)
         tlh_constrained_max = math.floor(inp.tlh_working / gain_per_share)
         trace.append(self._gate(
             rule="TLH_SIZING",
@@ -749,7 +671,6 @@ class DecisionService:
             note=f"max_shares_per_month ceiling = {urgency_constrained_max} shares",
         ))
 
-        # Log the OptionsLedger free_shares ceiling
         trace.append(self._gate(
             rule="FREE_SHARES_GATE",
             value=inp.sellable_shares,
@@ -762,7 +683,6 @@ class DecisionService:
             ),
         ))
 
-        # Block if TLH inventory can't cover even one share
         if tlh_constrained_max <= 0:
             reason = (
                 f"Mode 2: TLH working balance (${inp.tlh_working:.2f}) is insufficient "
@@ -782,8 +702,7 @@ class DecisionService:
                 blocking_reason=reason,
             )
 
-        # Binding limit: min of all three ceilings
-        raw_shares    = min(urgency_constrained_max, tlh_constrained_max)
+        raw_shares     = min(urgency_constrained_max, tlh_constrained_max)
         shares_to_sell = min(raw_shares, inp.sellable_shares)
 
         if shares_to_sell < raw_shares:
@@ -799,14 +718,13 @@ class DecisionService:
                 ),
             ))
 
-        enable_unwind  = shares_to_sell > 0
+        enable_unwind   = shares_to_sell > 0
         blocking_reason = None if enable_unwind else "shares_to_sell resolved to 0 after all constraints."
         trace.append(self._final(
             enable_unwind=enable_unwind,
             shares_to_sell=shares_to_sell,
             blocking_reason=blocking_reason,
         ))
-
         return DecisionResult(
             enable_unwind=enable_unwind,
             shares_to_sell=shares_to_sell,
@@ -826,18 +744,8 @@ class DecisionService:
         signal_verdicts: List[SignalVerdict],
         trace: List[TraceEntry],
     ) -> DecisionResult:
-        """
-        Mode 3: Aggressive Unwind.
-        Case 2: Forced sell. SELL_REQUIRED only.
-            shares_to_sell = min(max_shares_per_month, sellable_shares)
-            No TLH constraint. Full capital gains tax owed.
-
-        sellable_shares still applied — cannot sell encumbered shares even in Mode 3.
-        Spec §3: SELL_REQUIRED → must attempt selling.
-        """
         urgency_max = inp.unwind_params.max_shares_per_month
 
-        # Apply urgency_override scaling if provided
         if inp.unwind_params.urgency_override is not None:
             urgency_pct  = max(0, min(100, inp.unwind_params.urgency_override)) / 100.0
             adjusted_max = math.ceil(urgency_max * urgency_pct)
@@ -861,7 +769,6 @@ class DecisionService:
             note=f"Mode 3 ceiling: {urgency_max} shares (no TLH constraint applied)",
         ))
 
-        # OptionsLedger free_shares ceiling — applies even in forced mode
         trace.append(self._gate(
             rule="FREE_SHARES_GATE",
             value=inp.sellable_shares,
@@ -874,7 +781,6 @@ class DecisionService:
             ),
         ))
 
-        # Cannot sell more than sellable (no negative shares invariant, spec §10)
         shares_to_sell = min(urgency_max, inp.sellable_shares)
         if shares_to_sell < urgency_max:
             trace.append(self._gate(
@@ -882,10 +788,7 @@ class DecisionService:
                 value=shares_to_sell,
                 threshold=inp.sellable_shares,
                 passed=True,
-                note=(
-                    f"Clamped from {urgency_max} → {shares_to_sell} "
-                    f"(sellable_shares={inp.sellable_shares})"
-                ),
+                note=f"Clamped from {urgency_max} → {shares_to_sell} (sellable_shares={inp.sellable_shares})",
             ))
 
         enable_unwind   = shares_to_sell > 0
@@ -895,13 +798,12 @@ class DecisionService:
             shares_to_sell=shares_to_sell,
             blocking_reason=blocking_reason,
         ))
-
         return DecisionResult(
             enable_unwind=enable_unwind,
             shares_to_sell=shares_to_sell,
             final_shares=shares_to_sell,
             mode=mode,
-            tlh_constrained_max=None,   # not applicable in Mode 3
+            tlh_constrained_max=None,
             urgency_constrained_max=urgency_max,
             signal_verdicts=signal_verdicts,
             decision_trace=trace,

@@ -12,6 +12,10 @@ export default function App() {
   const [timeline, setTimeline] = useState(null);
   const [timelineSeries, setTimelineSeries] = useState(null);
   const [simulatedInputs, setSimulatedInputs] = useState(null);
+  // 1. Add state alongside timeline
+  const [monthlyIntelligence, setMonthlyIntelligence] = useState([]);
+  const [monthlyIntelligenceWhatif, setMonthlyIntelligenceWhatif] = useState(null);
+  const [isWhatIfRunning, setIsWhatIfRunning] = useState(false);
 
   const [inputs, setInputs] = useState({
     total_portfolio_value: 1250000,
@@ -25,15 +29,48 @@ export default function App() {
     ticker: "AAPL",
     initial_shares: 8000,
     unwind_cost_basis: 15.0,
-    horizon_years: 1
+    horizon_years: 1,
+    gate_overrides: {}
   });
+  const handleRunWhatIf = async (gateOverrides) => {
+    console.log("[DEBUG] gate_overrides being sent:", JSON.stringify(gateOverrides));
+    setIsWhatIfRunning(true);
+    setGlobalError(null);
+    try {
+      const payload = {
+        ...(simulatedInputs || inputs),
+        gate_overrides: gateOverrides,
+        horizon_months: (inputs.horizon_years || 1) * 12
+      };
+      const response = await fetch('http://localhost:8000/api/portfolio/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
+      if (!response.ok) {
+        throw new Error(`Simulation failed`);
+      }
+
+      const data = await response.json();
+      console.log("[DEBUG] What-If payload:", payload);
+      console.log("[DEBUG] What-If API returned:", data.monthly_intelligence_whatif);
+      setMonthlyIntelligenceWhatif(data.monthly_intelligence_whatif || null);
+    } catch (err) {
+      console.error(err);
+      setGlobalError(err.message || 'Failed to run what-if simulation');
+    } finally {
+      setIsWhatIfRunning(false);
+    }
+  };
+
+  // 2. Capture it in handleSimulationComplete
   const handleSimulationComplete = (timelineData) => {
-    // timelineData is now { timeline, timeline_series }
     setTimeline(timelineData.timeline);
     setTimelineSeries(timelineData.timeline_series);
+    setMonthlyIntelligence(timelineData.monthly_intelligence || []);
+    setMonthlyIntelligenceWhatif(null);
     setSimulatedInputs({ ...inputs });
-    // Auto-switch to history tab
     setActiveTab('history');
   };
 
@@ -43,7 +80,7 @@ export default function App() {
         <div className="flex items-center gap-2">
           <Activity className="text-blue-600 w-6 h-6" />
           <h1 className="text-xl font-semibold tracking-tight text-slate-800">
-            AI Advisory 
+            AI Advisory
             <span className="text-sm font-normal text-slate-500 ml-2">Portfolio Orchestrator V1</span>
           </h1>
         </div>
@@ -71,7 +108,7 @@ export default function App() {
           </button>
         </nav>
       </header>
-      
+
       {globalError && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 mx-6 mt-4 rounded shadow-sm">
           <div className="flex">
@@ -109,14 +146,21 @@ export default function App() {
               inputs={inputs}
               setInputs={setInputs}
               onSimulationComplete={handleSimulationComplete}
+              onSimulationStart={() => setMonthlyIntelligenceWhatif(null)}
             />
           )}
           {activeTab === 'history' && (
+            // 3. Pass it to HistoryTab
             <HistoryTab
               onError={setGlobalError}
               timeline={timeline}
               timelineSeries={timelineSeries}
+              monthlyIntelligence={monthlyIntelligence}
+              monthlyIntelligenceWhatif={monthlyIntelligenceWhatif}
               inputs={simulatedInputs || inputs}
+              onRunWhatIf={handleRunWhatIf}
+              isWhatIfRunning={isWhatIfRunning}
+              onClearWhatIf={() => setMonthlyIntelligenceWhatif(null)}
             />
           )}
           {activeTab === 'projection' && <ProjectionTab onError={setGlobalError} />}

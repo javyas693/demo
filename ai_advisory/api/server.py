@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
-from typing import Optional
+from typing import Optional, Dict
 from dotenv import load_dotenv
 from dotenv import load_dotenv
 import os
@@ -75,6 +75,23 @@ from ai_advisory.orchestration.time_simulator import simulate_portfolio
 from ai_advisory.orchestration.trace_logger import trace_log, reset_trace
 
 app = FastAPI(title="AI-Advisory API", version="0.1.0")
+ 
+# Phase 8 — init SQLite DB on startup
+from ai_advisory.db.database import init_db
+init_db()
+ 
+# Phase 7 — SPY benchmark cache
+
+# Phase 7 — SPY benchmark cache (loaded once per process on first /simulate call)
+_spy_prices_cache: dict | None = None
+
+def _get_spy_prices() -> dict:
+    global _spy_prices_cache
+    if _spy_prices_cache is None:
+        from ai_advisory.data.spy_loader import load_spy_prices
+        _spy_prices_cache = load_spy_prices()
+    return _spy_prices_cache
+
 
 # Single instance of ChatSessionManager
 session_manager = ChatSessionManager() if USE_LLM else None
@@ -115,7 +132,13 @@ def get_profile():
 
 @app.post("/profile/patch", response_model=ClientProfile)
 def patch_profile(patch: ProfilePatch):
-    return profile_store.patch(patch)
+    result = profile_store.patch(patch)
+    try:
+        from ai_advisory.db.profile_store_db import save_profile
+        save_profile(result.model_dump())
+    except Exception as e:
+        print(f"[DB] Profile save failed: {e}")
+    return result
 
 @app.get("/session", response_model=SessionResponse)
 def get_session():
@@ -459,21 +482,29 @@ def api_portfolio_projection():
 
 class TimeSimulateRequest(OrchestrateRequest):
     horizon_months: int = 12
-
+    gate_overrides: Optional[Dict[str, str]] = None
+    # Valid keys: MOMENTUM_GATE, MACRO_GATE, VOLATILITY_GATE,
+    #             PRICE_TRIGGER_GATE, CONCENTRATION_GATE,
+    #             TLH_CAPACITY_GATE, UNREALIZED_GAIN_GATE
+    # Valid value: "suppress"
+    # CLIENT_CONSTRAINT is never suppressible.
+ 
+ 
 @app.post("/api/portfolio/simulate")
 def api_portfolio_simulate(req: TimeSimulateRequest):
     clear_simulation_log()
-        
+ 
     reset_trace()
     trace_log("\n" + "="*50)
     trace_log(f"--- [MODULE 1] TRACE START: /api/portfolio/simulate ---")
     trace_log(f"INPUT RECEIVED: {req.model_dump()}")
     trace_log("="*50 + "\n")
+ 
     # Enforce STRICT concentrated baseline state
     income_val = 0.0
     model_val = 0.0
     total_val = req.concentrated_position_value + req.cash
-
+ 
     state = PortfolioState(
         total_portfolio_value=total_val,
         cash=req.cash,
@@ -488,47 +519,97 @@ def api_portfolio_simulate(req: TimeSimulateRequest):
         tlh_inventory=req.tlh_inventory,
         risk_score=req.risk_score
     )
-    
-    timeline = simulate_portfolio(
+ 
+    # Primary simulation run
+    spy_prices = _get_spy_prices()
+    timeline, monthly_intelligence = simulate_portfolio(
         initial_state=state,
         ticker=req.ticker,
         initial_shares=req.initial_shares,
         cost_basis=req.unwind_cost_basis,
         horizon_months=req.horizon_months,
-        income_preference=req.income_preference
+        income_preference=req.income_preference,
+        spy_prices=spy_prices,
     )
-    
+ 
+    # Phase 6 — what-if run when gate_overrides are provided
+    monthly_intelligence_whatif = None
+    if req.gate_overrides:
+        state_whatif = PortfolioState(
+            total_portfolio_value=total_val,
+            cash=req.cash,
+            ticker=req.ticker,
+            shares=req.initial_shares,
+            current_price=req.concentrated_position_value / req.initial_shares if req.initial_shares > 0 else 0.0,
+            cost_basis=req.unwind_cost_basis,
+            market_value=req.concentrated_position_value,
+            income_value=income_val,
+            annual_income=0.0,
+            model_value=model_val,
+            tlh_inventory=req.tlh_inventory,
+            risk_score=req.risk_score
+        )
+        _, monthly_intelligence_whatif = simulate_portfolio(
+            initial_state=state_whatif,
+            ticker=req.ticker,
+            initial_shares=req.initial_shares,
+            cost_basis=req.unwind_cost_basis,
+            horizon_months=req.horizon_months,
+            income_preference=req.income_preference,
+            gate_overrides=req.gate_overrides,
+            spy_prices=spy_prices,
+        )
+ 
     total_capital_released = sum(s.get("capital_released_this_step", 0.0) for s in timeline)
     total_allocated_income = sum(s.get("allocation_to_income_this_step", 0.0) for s in timeline)
-    total_allocated_model = sum(s.get("allocation_to_model_this_step", 0.0) for s in timeline)
-    
+    total_allocated_model  = sum(s.get("allocation_to_model_this_step", 0.0) for s in timeline)
+ 
     timeline_series = {
         "total_portfolio": [s.get("total_portfolio_value", 0.0) for s in timeline],
-        "concentrated": [s.get("concentrated_value", 0.0) for s in timeline],
-        "income": [s.get("income_value", 0.0) for s in timeline],
-        "model": [s.get("model_value", 0.0) for s in timeline],
-        "cash": [s.get("cash", 0.0) for s in timeline],
+        "concentrated":    [s.get("concentrated_value", 0.0) for s in timeline],
+        "income":          [s.get("income_value", 0.0) for s in timeline],
+        "model":           [s.get("model_value", 0.0) for s in timeline],
+        "cash":            [s.get("cash", 0.0) for s in timeline],
     }
-    
+ 
     response_dict = {
-        "state": timeline[-1] if timeline else None,
-        "timeline": timeline,
-        "timeline_series": timeline_series,
+        "state":                        timeline[-1] if timeline else None,
+        "timeline":                     timeline,
+        "timeline_series":              timeline_series,
+        "monthly_intelligence":         monthly_intelligence,
+        "monthly_intelligence_whatif":  monthly_intelligence_whatif,  # None when no overrides
         "summary": {
             "total_capital_released": total_capital_released,
             "total_allocated_income": total_allocated_income,
-            "total_allocated_model": total_allocated_model,
-            "final_state": timeline[-1] if timeline else None
+            "total_allocated_model":  total_allocated_model,
+            "final_state":            timeline[-1] if timeline else None,
         }
     }
-    
+ 
     trace_log("\n" + "="*50)
     trace_log("--- [MODULE 6] OUTPUT TRACE ---")
     trace_log(f"Final step values: {response_dict['summary']}")
     trace_log(f"Reconciliation: {timeline[-1].get('reconciliation') if timeline else 'None'}")
     trace_log("="*50 + "\n")
-
+ 
+    # Phase 8 — persist to DB (non-blocking, won't affect response)
+    try:
+        from ai_advisory.db.sim_store import save_simulation, save_whatif
+        from ai_advisory.db.gate_store import log_gate_override_run
+        save_simulation(req.model_dump(), timeline, monthly_intelligence)
+        if req.gate_overrides and monthly_intelligence_whatif:
+            save_whatif(req.gate_overrides, monthly_intelligence_whatif)
+            log_gate_override_run(req.gate_overrides, monthly_intelligence_whatif)
+    except Exception as e:
+        print(f"[DB] Simulation persist failed: {e}")
+ 
     return _sanitize_for_json(response_dict)
+
+
+@app.get("/api/portfolio/gate-override-history")
+def api_gate_override_history():
+    from ai_advisory.db.gate_store import load_gate_override_history
+    return load_gate_override_history()
 
 class MPSimulatePayload(BaseModel):
     target_weights: dict[str, float]
