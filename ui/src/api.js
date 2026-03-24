@@ -50,11 +50,11 @@ export const fetchHistory = async () => {
   }
 };
 
-export const fetchProjection = async () => {
+export const runProjection = async (payload) => {
   try {
-    const response = await api.get('/projection');
+    const response = await api.post('/projection', payload);
     return { data: response.data, error: null };
   } catch (err) {
-    return { data: null, error: 'System unavailable. Failed to fetch projections.' };
+    return { data: null, error: 'Projection failed. Check server logs.' };
   }
 };

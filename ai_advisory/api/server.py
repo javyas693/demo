@@ -475,11 +475,68 @@ def api_portfolio_history():
             return []
     return []
 
-@app.get("/api/portfolio/projection")
-def api_portfolio_projection():
-    # Stub for the projections tab
-    return {"status": "ok", "message": "Projections not yet implemented natively in v1 orchestrator."}
+class ProjectionRequest(BaseModel):
+    # Current portfolio state
+    cp_value:           float
+    income_value:       float = 0.0
+    model_value:        float = 0.0
+    cash:               float = 0.0
+    cost_basis:         float           # per-share cost basis
+    current_cp_price:   float           # current CP price per share
+    ticker:             str = "SPY"
 
+    # Projection parameters
+    horizon_years:      int = 20
+    income_preference:  float = 0.5     # fraction of proceeds → income sleeve
+
+    # Unwind schedule: {year: fraction_of_remaining_cp_to_sell}
+    # e.g. {"1": 0.10, "2": 0.10, ...}
+    unwind_schedule:    Dict[str, float] = {}
+
+    # Return/vol/tax overrides — all optional, defaults applied for missing keys
+    return_assumptions: Optional[Dict[str, float]] = None
+
+
+@app.post("/api/portfolio/projection")
+def api_portfolio_projection(req: ProjectionRequest):
+    """
+    Phase 10 — Forward Monte Carlo projection.
+    Projects CP, income, model, and total portfolio forward N years.
+    Returns 10th / 50th / 90th percentile bands per sleeve.
+    """
+    from ai_advisory.projection.projection_engine import run_projection
+    from ai_advisory.db.price_store import load_prices_from_cache
+    import pandas as pd
+
+    # Attempt to load CP price history for auto-fitting return/vol
+    cp_price_series = None
+    try:
+        cached = load_prices_from_cache([req.ticker])
+        raw = cached.get(req.ticker, {})
+        if len(raw) >= 60:
+            s = pd.Series(raw)
+            s.index = pd.to_datetime(s.index)
+            s = s.sort_index()
+            cp_price_series = s.resample("BME").last().dropna()
+    except Exception:
+        pass
+
+    result = run_projection(
+        cp_value=req.cp_value,
+        income_value=req.income_value,
+        model_value=req.model_value,
+        cash=req.cash,
+        cost_basis=req.cost_basis,
+        current_cp_price=req.current_cp_price,
+        horizon_years=req.horizon_years,
+        unwind_schedule=req.unwind_schedule,
+        income_preference=req.income_preference,
+        return_assumptions=req.return_assumptions,
+        ticker=req.ticker,
+        cp_price_series=cp_price_series,
+    )
+
+    return result
 class TimeSimulateRequest(OrchestrateRequest):
     horizon_months: int = 12
     gate_overrides: Optional[Dict[str, str]] = None
