@@ -3,11 +3,13 @@ import os
 import json
 import csv
 import pandas as pd
+from typing import Optional
 from ai_advisory.portfolio.portfolio_state import PortfolioState
 from ai_advisory.orchestration.portfolio_orchestrator import run_portfolio_cycle
 from ai_advisory.orchestration.reconciliation import reconcile_step
 from ai_advisory.orchestration.trace_logger import trace_log
 from ai_advisory.orchestration.execution_layer import execute_trades
+from ai_advisory.data.spy_loader import load_spy_prices, get_spy_price_on_or_before
 
 # ─────────────────────────────────────────────────────────
 # Strategy Engine Constants
@@ -27,26 +29,22 @@ def simulate_portfolio(
     income_yield_annual: float = INCOME_YIELD_ANNUAL,
     export_reconciliation: bool = False,
     export_chart_timeline: bool = False,
+    gate_overrides: Optional[dict] = None,   # Phase 6 — what-if gate suppression
+    spy_prices: Optional[dict] = None,       # Phase 7 — benchmark overlay
 ) -> list[dict]:
     """
     Deterministically simulates the portfolio over N periods using historical prices.
+
+    gate_overrides (Phase 6):
+        Optional dict passed straight through to run_portfolio_cycle on every step,
+        which forwards it to DecisionInput. Keys are gate names (e.g. "MACRO_GATE"),
+        value is "suppress". None (default) means normal run — no overrides applied.
 
     Each step:
       1. Orchestrator executes unwind / reallocation decision via DecisionService.
       2. Income engine value updates based on real historical prices.
       3. Model engine value updates based on real historical prices.
       4. Concentrated position price updates based on real historical prices.
-
-    Key changes from prior version:
-      - tlh_delta read from res_summary["tlh_delta_this_step"] (renamed)
-      - tlh_used removed — DecisionService owns TLH consumption; simulator
-        only adds tlh_delta_this_step to the running tlh_inventory balance
-      - shares_sold read from res_summary["shares_to_sell"] (DecisionResult)
-        not from nested_cp["shares_delta"] (CP engine no longer owns sell decisions)
-      - cash invariant updated to match new orch_summary key names
-      - TLH invariant simplified: inventory_after == inventory_before + tlh_delta_this_step
-      - open_option carried forward on PortfolioState for OptionsLedger restoration
-      - client_constraint carried on PortfolioState (new field, default SELL_OPTIONAL)
     """
 
     current_state  = initial_state
@@ -63,7 +61,11 @@ def simulate_portfolio(
     initial_cp_value            = initial_state.market_value
     initial_portfolio_value     = initial_state.total_portfolio_value
 
-    import yfinance as yf
+    # ─────────────────────────────────────────────────────────────────
+    # Phase 8 — Price loading: in-process cache → price_cache DB → yfinance
+    # Hierarchy: _YF_CACHE (frozenset key) → load_all_prices() → DB/yf
+    # ─────────────────────────────────────────────────────────────────
+    from ai_advisory.db.price_store import load_all_prices
     global _YF_CACHE
 
     all_etfs = [
@@ -71,64 +73,43 @@ def simulate_portfolio(
         "SHY", "LEMB", "HYG", "VCLT", "PGX", "SPY", "IJH",
         "IWM", "IAU", "SCHH", "BIL", "BTC-USD",
     ]
-    all_symbols  = [ticker] + all_etfs
-    cache_path   = os.path.join(os.path.dirname(__file__), "..", "..", "data", "yf_cache.pkl")
-    cache_key    = tuple(sorted(all_symbols))
+    all_symbols = [ticker] + all_etfs
+    cache_key   = frozenset(all_symbols)
 
-    df_hist = None
+    # ── 1. In-process hit ────────────────────────────────────────────
     if cache_key in _YF_CACHE:
-        df_hist = _YF_CACHE[cache_key]
+        historical_prices, _df_monthly_index = _YF_CACHE[cache_key]
+        trace_log("[PRICE] In-process _YF_CACHE hit — skipping DB + yfinance.")
     else:
-        try:
-            df_hist = yf.download(all_symbols, period="max", progress=False)
-            if df_hist is not None and not df_hist.empty:
-                _YF_CACHE[cache_key] = df_hist
-                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-                df_hist.to_pickle(cache_path)
-        except Exception as e:
-            trace_log(f"yfinance download exception: {e}")
+        # ── 2. DB layer (morning-refresh gate lives inside load_all_prices) ──
+        raw: dict[str, pd.Series] = load_all_prices(all_symbols)
 
-    if (df_hist is None or df_hist.empty) and os.path.exists(cache_path):
-        try:
-            df_hist = pd.read_pickle(cache_path)
-            trace_log("Recovered historical pricing from disk cache due to yfinance failure.")
-        except Exception:
-            pass
+        missing = [s for s in all_symbols if s not in raw]
+        if missing:
+            raise ValueError(f"System failed: data not available for symbols {missing}")
 
-    if df_hist is None or df_hist.empty:
-        raise ValueError(f"yfinance returned empty dataframe for symbols {all_symbols}")
+        # ── 3. Resample to business-month-end, trim to horizon ───────
+        df_raw     = pd.DataFrame(raw)
+        df_raw     = df_raw.ffill()
+        df_monthly = df_raw.resample("BME").last().dropna(how="all")
 
-    # Price extraction
-    if isinstance(df_hist.columns, pd.MultiIndex):
-        df_target = df_hist['Adj Close'] if 'Adj Close' in df_hist.columns.levels[0] else df_hist['Close']
-    else:
-        if 'Adj Close' in df_hist.columns:
-            df_target = df_hist['Adj Close']
-        elif 'Close' in df_hist.columns:
-            df_target = df_hist['Close']
-        else:
-            df_target = df_hist
+        required_len = horizon_months + 1
+        if len(df_monthly) > required_len:
+            df_monthly = df_monthly.iloc[-required_len:]
 
-    if isinstance(df_target, pd.Series):
-        df_target = df_target.to_frame(name=all_symbols[0])
-
-    df_target  = df_target.ffill()
-    df_monthly = df_target.resample('BME').last().dropna(how='all')
-
-    required_len = horizon_months + 1
-    if len(df_monthly) > required_len:
-        df_monthly = df_monthly.iloc[-required_len:]
-
-    historical_prices: dict = {}
-    for sym in all_symbols:
-        if sym in df_monthly.columns:
+        historical_prices: dict[str, list[float]] = {}
+        for sym in all_symbols:
+            if sym not in df_monthly.columns:
+                raise ValueError(f"System failed: data not available for symbol {sym}")
             series = df_monthly[sym]
             if series.isna().all():
                 raise ValueError(f"Symbol {sym} has no valid price data (all NaN)")
             historical_prices[sym] = series.ffill().bfill().tolist()
-        else:
-            raise ValueError(f"System failed: data not available for symbol {sym}")
 
+        _df_monthly_index = df_monthly.index
+        _YF_CACHE[cache_key] = (historical_prices, _df_monthly_index)
+        trace_log(f"[PRICE] Loaded {len(all_symbols)} symbols via price_cache DB; stored in _YF_CACHE.")
+        
     current_prices: dict = {}
     for t in all_etfs:
         current_prices[t] = float(historical_prices[t][0])
@@ -146,6 +127,12 @@ def simulate_portfolio(
         initial_state.__post_init__()
     initial_cp_value = initial_state.market_value
 
+    # Phase 7 — SPY benchmark: load once, index to month-0 portfolio value
+    if spy_prices is None:
+        spy_prices = load_spy_prices()
+    _benchmark_start_value: float | None = None
+    _benchmark_spy_start_price: float | None = None
+
     if ticker in historical_prices and len(historical_prices[ticker]) >= 3:
         trace_log("[DATA CHECK]")
         trace_log(f"Symbol: {ticker}")
@@ -156,6 +143,7 @@ def simulate_portfolio(
     STATIC_END   = "2023-01-31"
 
     timeline: list[dict] = []
+    monthly_intelligence: list[dict] = []
 
     # ------------------------------------------------------------------
     # Snapshot builder
@@ -166,6 +154,11 @@ def simulate_portfolio(
         income_generated, model_growth, cp_price,
         decision_log=None,
     ):
+        safe_idx = min(month_idx, len(historical_prices["SPY"]) - 1)
+        spy_current = float(historical_prices["SPY"][safe_idx])
+        spy_initial = float(historical_prices["SPY"][0])
+        bench_val = initial_portfolio_value * (spy_current / spy_initial) if spy_initial > 0 else 0.0
+
         return {
             "step_index":  month_idx,
             "year_index":  math.floor(month_idx / 12),
@@ -174,8 +167,9 @@ def simulate_portfolio(
 
             "total_portfolio_value": state.total_portfolio_value,
             "total_ecosystem_value": state.total_portfolio_value,
+            "benchmark_value":       bench_val,
             "cash":                  state.cash,
-            "concentration_pct":     state.concentration_pct * 100.0,
+            "concentration_pct":     state.concentration_pct,
 
             "concentrated_value":    state.market_value,
             "income_value":          state.income_value,
@@ -293,6 +287,7 @@ def simulate_portfolio(
             prices=current_prices,
             available_cash=available_cash,
             month=month,
+            gate_overrides=gate_overrides or {},   # Phase 6 — forwarded to DecisionInput
         )
 
         res_summary = orch_res["orch_summary"]
@@ -307,12 +302,8 @@ def simulate_portfolio(
         to_income        = res_summary["allocation_to_income"]
         to_model         = res_summary["allocation_to_model"]
 
-        # TLH: orchestrator reports what was generated this step only.
-        # DecisionService owns TLH consumption; simulator adds delta to inventory.
         tlh_delta_this_step = res_summary.get("tlh_delta_this_step", 0.0)
-
-        # Shares sold: comes from DecisionResult via orch_summary, not CP engine
-        shares_sold = res_summary.get("shares_to_sell", 0)
+        shares_sold         = res_summary.get("shares_to_sell", 0)
 
         cumulative_income_allocated += to_income
         cumulative_model_allocated  += to_model
@@ -356,9 +347,6 @@ def simulate_portfolio(
         if -1e-8 < computed_cash < 1e-8:
             computed_cash = 0.0
 
-        # Carry open_option forward so orchestrator can restore OptionsLedger
-        # state on the next step. CP engine puts new-style OptionPos (with
-        # position_id + expiry_date) in cp_summary; read from nested_reports.
         nested_cp_summary = orch_res["metadata"]["concentrated_position"]["summary"]
         new_open_option   = nested_cp_summary.get("open_option", None)
 
@@ -373,9 +361,6 @@ def simulate_portfolio(
             income_holdings=delta_income_holdings,
             model_value=new_model_value,
             model_holdings=delta_model_holdings,
-            # TLH inventory: prior balance + delta generated this step.
-            # DecisionService consumed TLH internally; simulator only adds what
-            # was generated. No tlh_used subtraction needed here.
             tlh_inventory=current_state.tlh_inventory + tlh_delta_this_step,
             risk_score=current_state.risk_score,
             client_constraint=current_state.client_constraint,
@@ -384,12 +369,12 @@ def simulate_portfolio(
         )
         current_state = new_state
 
-        # ── [CP AUDIT] Logging & Validation ──────────────────────────
-        shares_after         = new_state.shares
-        option_open          = nested_cp_summary.get("is_option_open", False)
-        option_premium       = nested_cp_summary.get("open_option_premium", 0.0)
+        # ── [CP AUDIT] ────────────────────────────────────────────────
+        shares_after           = new_state.shares
+        option_open            = nested_cp_summary.get("is_option_open", False)
+        option_premium         = nested_cp_summary.get("open_option_premium", 0.0)
         tlh_realized_this_step = nested_cp_summary.get("realized_option_loss", 0.0)
-        tlh_inventory_after  = new_state.tlh_inventory
+        tlh_inventory_after    = new_state.tlh_inventory
 
         trace_log("\n[CP AUDIT]")
         trace_log(f"month: {month}")
@@ -414,8 +399,6 @@ def simulate_portfolio(
             ):
                 warnings.append("option disappearance — no realized pnl or buyback cost recorded")
 
-        # Cash invariant: cash_after == cash_before + option_income + sales - purchases
-        # option_pnl key is now in orch_summary (net_option_result from CP engine)
         option_income_step = res_summary.get("option_income", 0.0)
         purchases          = to_income + to_model
         expected_cash      = cash_before + option_income_step + capital_released - purchases
@@ -426,8 +409,6 @@ def simulate_portfolio(
             f"released={capital_released:.2f}, purchases={purchases:.2f})"
         )
 
-        # TLH invariant: inventory_after == inventory_before + delta_this_step
-        # DecisionService manages internal consumption; simulator only adds generated delta.
         expected_tlh = tlh_inventory_before + tlh_delta_this_step
         assert abs(tlh_inventory_after - expected_tlh) < 0.01, (
             f"TLH Invariant Failed: {tlh_inventory_after:.4f} != "
@@ -497,6 +478,83 @@ def simulate_portfolio(
 
         timeline.append(snapshot)
 
+        # ── STEP 7b: Build monthly_intelligence entry ─────────────────
+        signal_verdicts = res_summary.get("signal_verdicts", [])
+
+        signals_for_ui = {}
+        for sv in signal_verdicts:
+            name = sv.get("signal", "")
+            if name == "momentum":
+                signals_for_ui["momentum_score"] = sv.get("value", 0.0)
+            elif name == "macro":
+                val = sv.get("value", 0.5)
+                if val > 0.6:
+                    signals_for_ui["macro_regime"] = "risk_on"
+                elif val < 0.4:
+                    signals_for_ui["macro_regime"] = "risk_off"
+                else:
+                    signals_for_ui["macro_regime"] = "neutral"
+            elif name == "volatility":
+                val = sv.get("value", 0.5)
+                if val > 0.8:
+                    signals_for_ui["volatility_level"] = "high"
+                elif val < 0.3:
+                    signals_for_ui["volatility_level"] = "low"
+                else:
+                    signals_for_ui["volatility_level"] = "medium"
+
+        if "momentum_score" not in signals_for_ui:
+            signals_for_ui["momentum_score"] = 0.0
+        if "macro_regime" not in signals_for_ui:
+            signals_for_ui["macro_regime"] = "neutral"
+        if "volatility_level" not in signals_for_ui:
+            signals_for_ui["volatility_level"] = "medium"
+        signals_for_ui["unwind_urgency"] = res_summary.get("unwind_urgency", 0.0)
+
+        intel_entry = {
+            "month":                month,
+            "date":                 f"Month {month}",
+            "mode":                 res_summary.get("decision_mode", ""),
+            "enable_unwind":        bool(res_summary.get("enable_unwind", False)),
+            "shares_to_sell":       int(res_summary.get("shares_to_sell", 0)),
+            "blocking_reason":      res_summary.get("blocking_reason", None),
+            "decision_trace":       res_summary.get("decision_trace", []),
+            "signals":              signals_for_ui,
+            "tlh_inventory_before": float(tlh_inventory_before),
+            "tlh_delta_this_step":  float(tlh_delta_this_step),
+            "tlh_inventory_after":  float(tlh_inventory_after),
+            "option_open":          bool(option_open),
+            "option_premium":       float(option_premium),
+            "shares_before":        float(shares_before),
+            "shares_after":         float(shares_after),
+            "cp_price":             float(current_price),
+            "concentration_pct":    float(current_state.concentration_pct) * 100.0,
+            "total_portfolio_value": float(current_state.total_portfolio_value),
+            "trades_executed":      len(trades),
+            "cash_delta":           float(cash_delta),
+            "reconciliation_valid": bool(is_valid),
+        }
+
+        # Phase 7 — compute benchmark_value for this month
+        # Use _df_monthly_index to get a real calendar date for SPY lookup
+        try:
+            month_date_str = _df_monthly_index[
+                min(month, len(_df_monthly_index) - 1)
+            ].strftime("%Y-%m-%d")
+            spy_price_now = get_spy_price_on_or_before(spy_prices, month_date_str)
+
+            if _benchmark_start_value is None:
+                _benchmark_start_value = intel_entry["total_portfolio_value"]
+                _benchmark_spy_start_price = spy_price_now
+
+            spy_mult = (spy_price_now / _benchmark_spy_start_price) if _benchmark_spy_start_price else 1.0
+            intel_entry["benchmark_value"] = round(_benchmark_start_value * spy_mult, 2)
+        except Exception as e:
+            trace_log(f"[BENCHMARK] SPY benchmark compute failed month {month}: {e}")
+            intel_entry["benchmark_value"] = None
+
+        monthly_intelligence.append(intel_entry)
+
         # ── STEP 8: Ledger trace & validation ─────────────────────────
         from ai_advisory.orchestration.ledger import get_ledger
         current_ledger = get_ledger()
@@ -562,4 +620,4 @@ def simulate_portfolio(
             f"blocked_by={blocking.get('blocking_reason','none')}"
         )
 
-    return timeline
+    return timeline, monthly_intelligence

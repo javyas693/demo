@@ -206,10 +206,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# === AI Advisory local scratch (Phase 1 cleanup) ===
-core/
-scripts/
-bootstrap_phase1.sh
 
 
 # Frontier artifacts

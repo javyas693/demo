@@ -8,8 +8,9 @@ import StrategyAttributionPanel from './StrategyAttributionPanel';
 import ReconciliationPanel from './ReconciliationPanel';
 import HoldingsPanel from './HoldingsPanel';
 import SimulationCharts from './SimulationCharts';
+import IntelligencePanel from './intelligence/IntelligencePanel';
 
-export default function HistoryTab({ onError, timeline, timelineSeries, inputs }) {
+export default function HistoryTab({ onError, timeline, timelineSeries, monthlyIntelligence, monthlyIntelligenceWhatif, inputs, onRunWhatIf, isWhatIfRunning, onClearWhatIf }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [speed, setSpeed] = useState(1);
@@ -46,7 +47,7 @@ export default function HistoryTab({ onError, timeline, timelineSeries, inputs }
     setIsPlaying(!isPlaying);
   };
 
-  // STEP 4: No simulation run yet
+  // No simulation run yet
   if (!timeline || timeline.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4 py-24">
@@ -59,6 +60,7 @@ export default function HistoryTab({ onError, timeline, timelineSeries, inputs }
 
   const baseState = timeline[0];
   const state = timeline[currentIndex];
+  const intel = monthlyIntelligence?.[currentIndex - 1] || null;
   const horizonMonths = (inputs?.horizon_years || 1) * 12;
 
   const portfolioDelta = state.total_portfolio_value - baseState.total_portfolio_value;
@@ -86,8 +88,8 @@ export default function HistoryTab({ onError, timeline, timelineSeries, inputs }
       {/* Playback Controls */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button 
-            onClick={togglePlay} 
+          <button
+            onClick={togglePlay}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md transition-colors"
           >
             {isPlaying ? (
@@ -103,11 +105,11 @@ export default function HistoryTab({ onError, timeline, timelineSeries, inputs }
               onChange={(e) => setSpeed(Number(e.target.value))}
               className="w-20 rounded border-slate-300 shadow-sm text-sm p-1"
             >
-               <option value={0.5}>0.5x</option>
-               <option value={1}>1x</option>
-               <option value={2}>2x</option>
-               <option value={5}>5x</option>
-               <option value={10}>10x</option>
+              <option value={0.5}>0.5x</option>
+              <option value={1}>1x</option>
+              <option value={2}>2x</option>
+              <option value={5}>5x</option>
+              <option value={10}>10x</option>
             </select>
           </div>
         </div>
@@ -120,11 +122,11 @@ export default function HistoryTab({ onError, timeline, timelineSeries, inputs }
             </span>
             <span>Horizon: {inputs?.horizon_years || 1} Years</span>
           </div>
-          <input 
-            type="range" 
-            min="0" max={timeline.length - 1} 
-            value={currentIndex} 
-            onChange={(e) => { setIsPlaying(false); setCurrentIndex(Number(e.target.value)); }} 
+          <input
+            type="range"
+            min="0" max={timeline.length - 1}
+            value={currentIndex}
+            onChange={(e) => { setIsPlaying(false); setCurrentIndex(Number(e.target.value)); }}
             className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
           />
         </div>
@@ -132,41 +134,41 @@ export default function HistoryTab({ onError, timeline, timelineSeries, inputs }
 
       {/* Portfolio Metrics Header */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex gap-4 divide-x divide-slate-100">
-         <div className="flex-1 px-4">
-           <span className="text-xs font-bold text-slate-400 uppercase">Portfolio Value</span>
-           <div className="flex items-baseline gap-2 mt-1">
-             <span className="text-lg font-bold text-slate-800">${state.total_portfolio_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-             <span className={`text-xs font-bold ${portfolioDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-               {portfolioDelta >= 0 ? '+' : ''}${portfolioDelta.toLocaleString(undefined, { maximumFractionDigits: 0 })} since start
-             </span>
-           </div>
-         </div>
-         <div className="flex-1 px-4">
-           <span className="text-xs font-bold text-slate-400 uppercase">Concentration</span>
-           <div className="flex items-baseline gap-2 mt-1">
-             <span className="text-lg font-bold text-slate-800">{state.concentration_pct.toFixed(1)}%</span>
-             <span className={`text-xs font-bold ${state.concentration_pct <= baseState.concentration_pct ? 'text-green-600' : 'text-red-500'}`}>
-               {state.concentration_pct > baseState.concentration_pct ? '+' : ''}
-               {(state.concentration_pct - baseState.concentration_pct).toFixed(1)}%
-             </span>
-           </div>
-         </div>
-         <div className="flex-1 px-4">
-           <span className="text-xs font-bold text-slate-400 uppercase">Annual Income</span>
-           <div className="flex items-baseline gap-2 mt-1">
-             <span className="text-lg font-bold text-slate-800">${(state.strategies?.income?.annual_income || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-             <span className={`text-xs font-bold ${(state.strategies?.income?.annual_income || 0) >= (baseState.strategies?.income?.annual_income || 0) ? 'text-green-600' : 'text-red-500'}`}>
-               {(state.strategies?.income?.annual_income || 0) >= (baseState.strategies?.income?.annual_income || 0) ? '+' : ''}
-               ${((state.strategies?.income?.annual_income || 0) - (baseState.strategies?.income?.annual_income || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-             </span>
-           </div>
-         </div>
-         <div className="flex-1 px-4">
-           <span className="text-xs font-bold text-slate-400 uppercase">Target Risk Score</span>
-           <div className="flex items-baseline gap-2 mt-1">
-             <span className="text-lg font-bold text-slate-800">{inputs?.risk_score || 50}</span>
-           </div>
-         </div>
+        <div className="flex-1 px-4">
+          <span className="text-xs font-bold text-slate-400 uppercase">Portfolio Value</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-lg font-bold text-slate-800">${state.total_portfolio_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            <span className={`text-xs font-bold ${portfolioDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {portfolioDelta >= 0 ? '+' : ''}${portfolioDelta.toLocaleString(undefined, { maximumFractionDigits: 0 })} since start
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 px-4">
+          <span className="text-xs font-bold text-slate-400 uppercase">Concentration</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-lg font-bold text-slate-800">{state.concentration_pct.toFixed(1)}%</span>
+            <span className={`text-xs font-bold ${state.concentration_pct <= baseState.concentration_pct ? 'text-green-600' : 'text-red-500'}`}>
+              {state.concentration_pct > baseState.concentration_pct ? '+' : ''}
+              {(state.concentration_pct - baseState.concentration_pct).toFixed(1)}%
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 px-4">
+          <span className="text-xs font-bold text-slate-400 uppercase">Annual Income</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-lg font-bold text-slate-800">${(state.strategies?.income?.annual_income || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            <span className={`text-xs font-bold ${(state.strategies?.income?.annual_income || 0) >= (baseState.strategies?.income?.annual_income || 0) ? 'text-green-600' : 'text-red-500'}`}>
+              {(state.strategies?.income?.annual_income || 0) >= (baseState.strategies?.income?.annual_income || 0) ? '+' : ''}
+              ${((state.strategies?.income?.annual_income || 0) - (baseState.strategies?.income?.annual_income || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 px-4">
+          <span className="text-xs font-bold text-slate-400 uppercase">Target Risk Score</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-lg font-bold text-slate-800">{inputs?.risk_score || 50}</span>
+          </div>
+        </div>
       </div>
 
       {/* Month Step Summary Bar */}
@@ -188,10 +190,23 @@ export default function HistoryTab({ onError, timeline, timelineSeries, inputs }
       <StrategyAttributionPanel frame={state} baseFrame={baseState} />
       <HoldingsPanel frame={state} />
       <ReconciliationPanel frame={state} />
-      
+
       <SimulationCharts timeline={timeline} timelineSeries={timelineSeries} currentIndex={currentIndex} />
-      
+
       {hasTrace && <DecisionTracePanel trace={state.decision_trace} />}
+
+      {/* Intelligence Panel — reads monthly_intelligence from simulate response */}
+      <IntelligencePanel
+        intel={intel}
+        allIntel={monthlyIntelligence || []}
+        allIntelWhatif={monthlyIntelligenceWhatif}
+        gateOverrides={inputs?.gate_overrides}
+        currentIndex={currentIndex}
+        onRunWhatIf={onRunWhatIf}
+        isWhatIfRunning={isWhatIfRunning}
+        onClearWhatIf={onClearWhatIf}
+      />
+
     </div>
   );
 }

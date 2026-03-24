@@ -1,6 +1,6 @@
 import React from 'react';
-import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar, 
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend
 } from 'recharts';
 
@@ -12,7 +12,9 @@ const CustomTooltip = ({ active, payload, label }) => {
         <p className="font-bold text-slate-800 mb-2 border-b border-slate-100 pb-1">Month {data.month}</p>
         <div className="space-y-1">
           <p className="font-semibold text-slate-700">Total: ${Math.round(data.total_portfolio_value).toLocaleString()}</p>
-          
+          {data.benchmark_value != null && (
+            <p className="text-slate-400 text-xs">SPY Benchmark: ${Math.round(data.benchmark_value).toLocaleString()}</p>
+          )}
           <div className="pt-2 border-t border-slate-100 mt-2">
             <p className="text-xs font-bold text-slate-400 uppercase mb-1">Concentrated Position</p>
             <div className="bg-slate-50 p-1.5 rounded text-xs space-y-0.5 border border-slate-100">
@@ -21,7 +23,7 @@ const CustomTooltip = ({ active, payload, label }) => {
               <p className="flex justify-between font-bold text-amber-700 mt-1 pt-1 border-t border-slate-200"><span className="text-amber-800">Computed value:</span> <span>${Math.round(data.concentrated_value).toLocaleString()}</span></p>
             </div>
           </div>
-          
+
           <div className="pt-2 border-t border-slate-100 mt-2">
             <p className="text-xs font-bold text-slate-400 uppercase">Other Holdings</p>
             <p className="flex justify-between text-sky-700"><span className="text-sky-600">Income:</span> <span>${Math.round(data.income_value).toLocaleString()}</span></p>
@@ -49,7 +51,7 @@ export default function SimulationCharts({ timeline, timelineSeries, currentInde
   return (
     <div className="w-full flex justify-center py-4">
       <div className="w-full grid grid-cols-1 xl:grid-cols-2 gap-4">
-        
+
         {/* Module 1: Total Portfolio Line */}
         <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex flex-col items-center">
           <h3 className="text-sm font-bold text-slate-700 mb-4 w-full text-center">Total Portfolio Value</h3>
@@ -58,10 +60,12 @@ export default function SimulationCharts({ timeline, timelineSeries, currentInde
               <LineChart data={timeline} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${(val/1000)}k`} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${(val / 1000)}k`} />
                 <Tooltip content={<CustomTooltip />} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} verticalAlign="top" align="right" />
                 <ReferenceLine x={currentMonth} stroke="#3b82f6" strokeDasharray="3 3" />
-                <Line type="monotone" dataKey="total_portfolio_value" stroke="#2563eb" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="total_portfolio_value" name="Portfolio" stroke="#2563eb" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="benchmark_value" name="SPY Benchmark" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 4" dot={false} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -75,7 +79,7 @@ export default function SimulationCharts({ timeline, timelineSeries, currentInde
               <AreaChart data={timeline} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${(val/1000)}k`} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${(val / 1000)}k`} />
                 <Tooltip content={<CustomTooltip />} />
                 <ReferenceLine x={currentMonth} stroke="#3b82f6" strokeDasharray="3 3" />
                 <Area type="monotone" dataKey="cash" stackId="1" stroke="#94a3b8" fill="#cbd5e1" />
@@ -95,7 +99,7 @@ export default function SimulationCharts({ timeline, timelineSeries, currentInde
               <LineChart data={timeline} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${(val/1000).toFixed(1)}k`} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${(val / 1000).toFixed(1)}k`} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                 <ReferenceLine x={currentMonth} stroke="#3b82f6" strokeDasharray="3 3" />

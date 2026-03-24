@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { simulatePortfolio } from '../api';
 import { Settings, Play } from 'lucide-react';
 
-export default function StrategyTab({ onError, inputs, setInputs, onSimulationComplete }) {
+export default function StrategyTab({ onError, inputs, setInputs, onSimulationComplete, onSimulationStart }) {
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -11,6 +11,7 @@ export default function StrategyTab({ onError, inputs, setInputs, onSimulationCo
   };
 
   const handleSimulate = async () => {
+    if (onSimulationStart) onSimulationStart();
     setLoading(true);
     onError(null);
     const { data, error } = await simulatePortfolio(inputs);
