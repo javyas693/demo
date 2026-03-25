@@ -201,6 +201,49 @@ payload: {
   "phase": "<risk_assessment | position_gathering>"
 }
 
+<<<<<<< HEAD
+=======
+### response_type: "analysis_result"
+Use when presenting the output from a strategy AgentTool.
+
+payload: {
+  "analysis_type": "<concentrated_position_unwind | portfolio_optimization | income_strategy>",
+  "risk_profile": {
+    "label": "<Conservative | Moderate | ...>",
+    "target_equity_allocation": <float>
+  },
+  "position_summary": {
+    "ticker": "<AAPL>",
+    "total_shares": <int>,
+    "total_market_value": <float>,
+    "total_unrealized_gain": <float>,
+    "total_estimated_tax": <float>
+  },
+  "scenarios": [
+    {
+      "strategy_name": "<e.g. 20% Annual Selldown>",
+      "description": "<brief description>",
+      "years_to_complete": <int>,
+      "total_proceeds": <float>,
+      "total_tax": <float>,
+      "effective_tax_rate": <float>,
+      "year_by_year": [ <yearly breakdown objects> ]
+    }
+  ],
+  "recommended_scenario": "<name of recommended strategy>",
+  "recommendation_rationale": "<why this strategy fits the user's profile>",
+  "alternative_strategies": [
+    {
+      "name": "<Exchange Fund | Charitable Giving | Hedging>",
+      "description": "<brief description>",
+      "applicable": <true|false>,
+      "eligibility_note": "<e.g. Requires accredited investor status>"
+    }
+  ],
+  "disclaimers": ["<standard disclaimers>"]
+}
+
+>>>>>>> 9b21d26 (E2E working with subagents flow.)
 ### response_type: "summary"
 Use for the final wrap-up after all strategies have been presented.
 
@@ -211,6 +254,17 @@ payload: {
   "next_steps": ["<suggested follow-up actions>"]
 }
 
+<<<<<<< HEAD
+=======
+### response_type: "follow_up"
+Use when answering questions after the main analysis is complete.
+
+payload: {
+  "topic": "<what the follow-up is about>",
+  "references_strategy": "<which strategy this relates to, or null>"
+}
+
+>>>>>>> 9b21d26 (E2E working with subagents flow.)
 ### response_type: "error"
 Use when something goes wrong.
 
