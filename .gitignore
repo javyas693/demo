@@ -238,5 +238,8 @@ package-lock.json
 
 # pycache
 **/__pycache__/
-**/**/__pycache__/
 **/core/**/__pycache__/
+
+# macOS
+.DS_Store
+**/.DS_Store
