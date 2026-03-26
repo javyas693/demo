@@ -5,11 +5,10 @@ import { motion, AnimatePresence } from "motion/react"
 import { Sparkles, AlertTriangle } from "lucide-react"
 
 import { session, patchProfile } from "@/lib/api"
-import { WelcomeLanding } from "@/components/welcome-landing"
+import { WelcomeLanding, ChatSummaryPayload } from "@/components/welcome-landing"
 import { MainAppClient } from "@/components/main-app-client"
 
 export default function Home() {
-  const [hasProfile, setHasProfile] = React.useState<boolean | null>(null);
   const [isLoggedIn, setIsLoggedIn] = React.useState<boolean>(false);
   const [showBanner, setShowBanner] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -19,7 +18,6 @@ export default function Home() {
     async function checkSession() {
       try {
         const res = await session();
-        setHasProfile(res.has_profile);
         setIsLoggedIn(res.is_logged_in);
       } catch (error) {
         console.error("Failed to load session:", error);
@@ -65,15 +63,21 @@ export default function Home() {
   if (!isLoggedIn) {
     return <WelcomeLanding 
       onLogin={handleLogin}
-      onGetStarted={async () => {
+      onGetStarted={async (payload: ChatSummaryPayload) => {
         try {
-          await patchProfile({ cash_to_invest: 1000000, risk_score: 65, positions: [] });
-          // Also perform login after "getting started" so we skip to main app
+          await patchProfile({
+            risk_score: Math.round(payload.risk_score_final),
+            cash_to_invest: payload.starting_cash,
+            positions: payload.position_lots.map(lot => ({
+              symbol: lot.ticker,
+              shares: lot.shares,
+              cost_basis: lot.cost_basis,
+            })),
+          });
           await handleLogin();
         } catch (e) {
           console.error("Failed to persist initial profile", e);
         }
-        setHasProfile(true);
         setShowBanner(true);
       }} 
     />;

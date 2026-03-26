@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { postChat, ChatResponse } from "@/lib/api"
 
-export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => void, onLogin: () => void }) {
+export interface ChatSummaryPayload {
+    risk_score_final: number
+    position_ticker: string
+    position_lots: { lot_id: string; ticker: string; shares: number; cost_basis: number; acquisition_date: string }[]
+    starting_cash: number
+}
+
+export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: (payload: ChatSummaryPayload) => void, onLogin: () => void }) {
     const [step, setStep] = React.useState<'hero' | 'chat'>('hero')
 
     const [messages, setMessages] = React.useState<{ role: 'assistant' | 'user', content: string }[]>([])
@@ -62,7 +69,12 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
             if (response.response_type === 'summary') {
                 setIsComplete(true)
                 setTimeout(() => {
-                    onGetStarted()
+                    onGetStarted({
+                        risk_score_final: response.payload?.risk_score_final,
+                        position_ticker: response.payload?.position_ticker,
+                        position_lots: response.payload?.position_lots,
+                        starting_cash: response.payload?.starting_cash,
+                    })
                 }, 3000)
             }
         } catch (error) {
