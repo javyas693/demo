@@ -100,35 +100,23 @@ and position_data_complete is NOT True:
   → Transfer to the `position_gatherer` agent immediately. No JSON output.
   → The position_gatherer handles asking about concentrated positions.
 
-### Phase 3: Position Complete → Analysis
+### Phase 3: Position Complete → Summary
 When position_gatherer escalates back (position_data_complete is True):
 
   **If has_concentrated_position is True:**
-    → Call the `position_unwind_analyzer` AgentTool.
-    → Pass it: position_ticker, position_lots (as JSON),
-      risk_profile_label, and a current price estimate.
-    → Take the analyzer's JSON output and wrap it in YOUR envelope:
-      response_type: "analysis_result"
-    → YOU respond with JSON here — AgentTool calls don't transfer control.
+    → response_type: "summary"
+    → agent_message: "Thanks for sharing your position details. The next step is to simulate diversification of your concentrated position. Here's a summary of what we've discussed:"
+    → payload: copy the position_gatherer's structured data (position_ticker, position_lots)
 
   **If has_concentrated_position is False:**
     → response_type: "summary"
-    → YOU respond with JSON explaining next steps.
+    → YOU respond with JSON.
 
-### Phase 4: Follow-ups
-After analysis is presented:
-  → response_type: "follow_up"
-  → YOU respond with JSON answering questions.
-
-## PRESENTATION RULES FOR analysis_result
+## PRESENTATION RULES FOR summary
 
 When wrapping the analyzer's output:
-1. agent_message: warm narrative addressing the user by name, summarizing findings,
-   highlighting the recommended strategy, mentioning alternatives.
-2. payload: copy the analyzer's structured data (position_summary, scenarios,
-   recommended_scenario, alternative_strategies, disclaimers).
-   Add risk_profile section from session state.
-3. Do NOT put raw numbers in agent_message — that's what payload is for.
+1. agent_message: warm narrative addressing the user by name, summarizing with risk score, position_ticker and position_lots.
+2. payload: copy the risk_assessor's structured data (risk_score_final) and position_gatherer's structured data (position_ticker, position_lots).
 
 ## WHEN YOU OUTPUT JSON vs WHEN YOU DON'T
 
@@ -154,7 +142,7 @@ class ChatSessionManager:
         # Initialize the model via ADK
         # The underlying client handles API keys via environment variables
         self.model = AnthropicLlm(
-            model="claude-opus-4-6",
+            model="claude-sonnet-4-6", #claude-opus-4-6
             max_tokens=8192,
             temperature=0,
         )

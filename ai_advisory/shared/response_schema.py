@@ -9,9 +9,7 @@ RESPONSE TYPES BY AGENT:
   Orchestrator:
     - greeting              → Initial welcome, before risk assessment
     - handoff               → Transitioning to a specialist agent
-    - analysis_result       → Presenting unwind analysis from AgentTool
     - summary               → Final plan / wrap-up
-    - follow_up             → Answering user questions after analysis
     - error                 → Something went wrong
 
   Risk Assessor:
@@ -28,9 +26,7 @@ RESPONSE TYPES BY AGENT:
 # Orchestrator
 GREETING = "greeting"
 HANDOFF = "handoff"
-ANALYSIS_RESULT = "analysis_result"
 SUMMARY = "summary"
-FOLLOW_UP = "follow_up"
 ERROR = "error"
 
 # Risk Assessor
@@ -205,46 +201,6 @@ payload: {
   "phase": "<risk_assessment | position_gathering>"
 }
 
-### response_type: "analysis_result"
-Use when presenting the output from a strategy AgentTool.
-
-payload: {
-  "analysis_type": "<concentrated_position_unwind | portfolio_optimization | income_strategy>",
-  "risk_profile": {
-    "label": "<Conservative | Moderate | ...>",
-    "target_equity_allocation": <float>
-  },
-  "position_summary": {
-    "ticker": "<AAPL>",
-    "total_shares": <int>,
-    "total_market_value": <float>,
-    "total_unrealized_gain": <float>,
-    "total_estimated_tax": <float>
-  },
-  "scenarios": [
-    {
-      "strategy_name": "<e.g. 20% Annual Selldown>",
-      "description": "<brief description>",
-      "years_to_complete": <int>,
-      "total_proceeds": <float>,
-      "total_tax": <float>,
-      "effective_tax_rate": <float>,
-      "year_by_year": [ <yearly breakdown objects> ]
-    }
-  ],
-  "recommended_scenario": "<name of recommended strategy>",
-  "recommendation_rationale": "<why this strategy fits the user's profile>",
-  "alternative_strategies": [
-    {
-      "name": "<Exchange Fund | Charitable Giving | Hedging>",
-      "description": "<brief description>",
-      "applicable": <true|false>,
-      "eligibility_note": "<e.g. Requires accredited investor status>"
-    }
-  ],
-  "disclaimers": ["<standard disclaimers>"]
-}
-
 ### response_type: "summary"
 Use for the final wrap-up after all strategies have been presented.
 
@@ -253,14 +209,6 @@ payload: {
   "strategies_analyzed": ["<list of strategies that were run>"],
   "key_recommendations": ["<top 2-3 action items>"],
   "next_steps": ["<suggested follow-up actions>"]
-}
-
-### response_type: "follow_up"
-Use when answering questions after the main analysis is complete.
-
-payload: {
-  "topic": "<what the follow-up is about>",
-  "references_strategy": "<which strategy this relates to, or null>"
 }
 
 ### response_type: "error"

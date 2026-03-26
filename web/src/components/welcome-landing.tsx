@@ -59,7 +59,7 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
             }
 
             // If analysis is complete or flow ends
-            if (response.response_type === 'risk_score_complete' || response.response_type === 'analysis_result') {
+            if (response.response_type === 'summary') {
                 setIsComplete(true)
                 setTimeout(() => {
                     onGetStarted()
@@ -89,11 +89,11 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
 
             {/* Top Right Login */}
             <div className="absolute top-6 right-8">
-                <button 
-                  onClick={onLogin}
-                  className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+                <button
+                    onClick={onLogin}
+                    className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
                 >
-                  Log In
+                    Log In
                 </button>
             </div>
 
