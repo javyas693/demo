@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import React, { useState, useCallback } from 'react';
-=======
 import { useState, useCallback } from 'react';
->>>>>>> main
 import { runProjection } from '../api';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -29,11 +25,7 @@ function CustomTooltip({ active, payload, label }) {
       <p className="font-bold text-slate-800 mb-2 border-b border-slate-100 pb-1">{label}</p>
       <div className="space-y-1">
         {payload
-<<<<<<< HEAD
-          .filter(p => p.name !== 'p90 (bull)' && p.name !== 'p10 (bear)')
-=======
           .filter(p => p.name !== 'Strong market' && p.name !== 'Tough market')
->>>>>>> main
           .map((p, i) => (
             <div key={i} className="flex justify-between gap-4">
               <span className="text-slate-500">{p.name}</span>
@@ -149,12 +141,7 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
         <TrendingUp className="w-16 h-16 opacity-20" />
         <p className="text-lg font-medium">Run a simulation first</p>
         <p className="text-sm text-slate-400">
-<<<<<<< HEAD
-          Go to the <span className="text-blue-600 font-semibold">Strategy Input</span> tab
-          and click Run Simulation, then return here.
-=======
           Go back to <span className="text-blue-600 font-semibold">Home</span> and analyze your position first.
->>>>>>> main
         </p>
       </div>
     );
@@ -165,18 +152,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
 
       {/* ── Input panel ── */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-<<<<<<< HEAD
-        <h3 className="text-sm font-bold text-slate-700 mb-4">Projection inputs</h3>
-
-        <SliderRow label="Projection horizon" value={horizonYears} min={5} max={30}
-          onChange={setHorizonYears} format={v => `${v} yrs`} />
-        <SliderRow label="Unwind target" value={unwindPct} min={10} max={100} step={5}
-          onChange={setUnwindPct} format={v => `${v}%`} />
-        <SliderRow label="Spread over" value={unwindYears} min={1}
-          max={Math.min(15, horizonYears)}
-          onChange={setUnwindYears} format={v => `${v} yrs`} />
-        <SliderRow label="Proceeds → income" value={incomePreference} min={0} max={100}
-=======
         <h3 className="text-sm font-bold text-slate-700 mb-4">Adjust your outlook</h3>
 
         <SliderRow label="How far ahead to model" value={horizonYears} min={5} max={30}
@@ -209,7 +184,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
         )}
 
         <SliderRow label="Proceeds allocated to income" value={incomePreference} min={0} max={100}
->>>>>>> main
           step={10} onChange={setIncomePreference} format={v => `${v}%`} />
 
         <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5
@@ -229,11 +203,7 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
           {showAdvanced
             ? <ChevronUp className="w-3.5 h-3.5" />
             : <ChevronDown className="w-3.5 h-3.5" />}
-<<<<<<< HEAD
-          Return assumptions (advanced)
-=======
           Growth rate assumptions (advanced)
->>>>>>> main
         </button>
 
         {showAdvanced && (
@@ -272,17 +242,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-<<<<<<< HEAD
-            <MetricCard label={`Year ${horizonYears} median`}
-              value={fmtFull(finalYear?.total_p50)} accent="text-blue-700" />
-            <MetricCard label="Bear case (p10)"
-              value={fmtFull(finalYear?.total_p10)} accent="text-red-600"
-              sub={`Year ${horizonYears}`} />
-            <MetricCard label="Bull case (p90)"
-              value={fmtFull(finalYear?.total_p90)} accent="text-emerald-600"
-              sub={`Year ${horizonYears}`} />
-            <MetricCard label="Tax paid (median)"
-=======
             <MetricCard label={`Year ${horizonYears} expected`}
               value={fmtFull(finalYear?.total_p50)} accent="text-blue-700" />
             <MetricCard label="Tough market"
@@ -292,7 +251,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
               value={fmtFull(finalYear?.total_p90)} accent="text-emerald-600"
               sub={`Year ${horizonYears}`} />
             <MetricCard label="Tax paid (expected)"
->>>>>>> main
               value={fmtFull(finalYear?.cumulative_tax_paid_p50)} accent="text-amber-700" />
           </div>
 
@@ -301,34 +259,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
             <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5
               flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
               <span>
-<<<<<<< HEAD
-                <span className="font-semibold text-slate-700">
-                  {simulatedInputs?.ticker}
-                </span>{' '}
-                CP: {(a.cp_annual_return * 100).toFixed(1)}% return /
-                {(a.cp_annual_vol * 100).toFixed(1)}% vol{' '}
-                <span className="text-slate-400">({a.cp_assumptions_source})</span>
-              </span>
-              <span>Income:{' '}
-                <span className="font-semibold text-slate-700">
-                  {(a.income_annual_return * 100).toFixed(1)}%
-                </span>
-              </span>
-              <span>Model:{' '}
-                <span className="font-semibold text-slate-700">
-                  {(a.model_annual_return * 100).toFixed(1)}%
-                </span>
-              </span>
-              <span>Tax:{' '}
-                <span className="font-semibold text-slate-700">
-                  {(a.tax_rate * 100).toFixed(0)}%
-                </span>
-              </span>
-              <span>Paths:{' '}
-                <span className="font-semibold text-slate-700">
-                  {result.simulations_run.toLocaleString()}
-                </span>
-=======
                 <span className="font-semibold text-slate-700">{simulatedInputs?.ticker}</span>{' '}
                 {(a.cp_annual_return * 100).toFixed(1)}% annual return · {(a.cp_annual_vol * 100).toFixed(1)}% volatility{' '}
                 <span className="text-slate-400">({a.cp_assumptions_source})</span>
@@ -344,7 +274,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
               </span>
               <span>Simulations run:{' '}
                 <span className="font-semibold text-slate-700">{result.simulations_run.toLocaleString()}</span>
->>>>>>> main
               </span>
             </div>
           )}
@@ -352,19 +281,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
           {/* Total portfolio fan chart */}
           <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
             <h3 className="text-sm font-bold text-slate-700 mb-1">
-<<<<<<< HEAD
-              Total portfolio — percentile fan
-            </h3>
-            <p className="text-xs text-slate-400 mb-3">
-              Shaded region = 10th–90th percentile spread across 1,000 paths
-            </p>
-            <div className="flex flex-wrap gap-4 mb-3 text-xs text-slate-500">
-              {[
-                { cls: 'bg-blue-600',   label: 'Total p50' },
-                { cls: 'bg-teal-600',   label: 'CP p50' },
-                { cls: 'bg-amber-500',  label: 'Income p50' },
-                { cls: 'bg-violet-500', label: 'Model p50' },
-=======
               Total portfolio value over time
             </h3>
             <p className="text-xs text-slate-400 mb-3">
@@ -376,7 +292,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
                 { cls: 'bg-teal-600',   label: 'Concentrated position' },
                 { cls: 'bg-amber-500',  label: 'Income strategy' },
                 { cls: 'bg-violet-500', label: 'Diversified holdings' },
->>>>>>> main
               ].map(l => (
                 <span key={l.label} className="flex items-center gap-1.5">
                   <span className={`w-2.5 h-2.5 rounded-sm ${l.cls}`} />
@@ -394,19 +309,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
                     width={62} />
                   <Tooltip content={<CustomTooltip />} />
                   <Line dataKey="p90" stroke="rgba(37,99,235,0.15)" strokeWidth={1}
-<<<<<<< HEAD
-                    dot={false} name="p90 (bull)" />
-                  <Line dataKey="p10" stroke="rgba(37,99,235,0.15)" strokeWidth={1}
-                    dot={false} name="p10 (bear)" />
-                  <Line dataKey="total" stroke="#2563eb" strokeWidth={2.5}
-                    dot={false} name="Total p50" />
-                  <Line dataKey="cp" stroke="#0f766e" strokeWidth={1.5}
-                    dot={false} strokeDasharray="4 3" name="CP p50" />
-                  <Line dataKey="income" stroke="#d97706" strokeWidth={1.5}
-                    dot={false} name="Income p50" />
-                  <Line dataKey="model" stroke="#7c3aed" strokeWidth={1.5}
-                    dot={false} name="Model p50" />
-=======
                     dot={false} name="Strong market" />
                   <Line dataKey="p10" stroke="rgba(37,99,235,0.15)" strokeWidth={1}
                     dot={false} name="Tough market" />
@@ -418,7 +320,6 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
                     dot={false} name="Income strategy" />
                   <Line dataKey="model" stroke="#7c3aed" strokeWidth={1.5}
                     dot={false} name="Diversified holdings" />
->>>>>>> main
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -428,11 +329,7 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
               <h3 className="text-sm font-bold text-slate-700 mb-4">
-<<<<<<< HEAD
-                Sleeve breakdown — median
-=======
                 Where your wealth sits — expected path
->>>>>>> main
               </h3>
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -454,17 +351,10 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
 
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
               <h3 className="text-sm font-bold text-slate-700 mb-1">
-<<<<<<< HEAD
-                CP concentration over time
-              </h3>
-              <p className="text-xs text-slate-400 mb-4">
-                Dashed line = 15% diversification target
-=======
                 Concentration reducing over time
               </h3>
               <p className="text-xs text-slate-400 mb-4">
                 Dashed line = 15% target
->>>>>>> main
               </p>
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -488,22 +378,13 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
 
           {/* Annual table */}
           <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
-<<<<<<< HEAD
-            <h3 className="text-sm font-bold text-slate-700 mb-4">Annual snapshot</h3>
-=======
             <h3 className="text-sm font-bold text-slate-700 mb-4">Year by year breakdown</h3>
->>>>>>> main
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100">
-<<<<<<< HEAD
-                    {['Year','Bear (p10)','Median','Bull (p90)',
-                      'CP','Income','Model','CP %','Tax paid'].map(h => (
-=======
                     {['Year','Tough market','Expected','Strong market',
                       'Your position','Income','Diversified','Concentration','Tax paid'].map(h => (
->>>>>>> main
                       <th key={h} className="px-3 py-2 text-right font-bold text-slate-400
                         uppercase tracking-widest whitespace-nowrap">{h}</th>
                     ))}
