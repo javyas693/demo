@@ -74,7 +74,7 @@ def simulate_portfolio(
         "IWM", "IAU", "SCHH", "BIL", "BTC-USD",
     ]
     all_symbols = [ticker] + all_etfs
-    cache_key   = frozenset(all_symbols)
+    cache_key   = (frozenset(all_symbols), horizon_months)
 
     # ── 1. In-process hit ────────────────────────────────────────────
     if cache_key in _YF_CACHE:

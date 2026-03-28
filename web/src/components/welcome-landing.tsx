@@ -121,6 +121,12 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: (paylo
                     onClick={onLogin}
                     className="text-sm font-medium text-zinc-400 hover:text-white transition-colors py-1.5"
                 >
+                    Skip Setup
+                </button>
+                <button
+                    onClick={onLogin}
+                    className="text-sm font-medium text-zinc-400 hover:text-white transition-colors py-1.5"
+                >
                     Log In
                 </button>
             </div>

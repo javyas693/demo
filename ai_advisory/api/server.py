@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 import os
 import logging
 
-
 # Load environment variables from .env
 from dotenv import load_dotenv
 load_dotenv()
