@@ -39,8 +39,11 @@ logging.getLogger().addHandler(logging.StreamHandler())
 from ai_advisory.config import USE_LLM
 
 if USE_LLM:
-    from ai_advisory.agent.bot import ChatSessionManager
+    #from ai_advisory.agent.bot import ChatSessionManager
+    from ai_advisory.agents.orchestrator.agent import ChatSessionManager
+
     
+
 from ai_advisory.services.http_models import ClientProfile, ProfilePatch, OrchestrateResponse
 from ai_advisory.services.profile_store import ProfileStore
 from ai_advisory.services.orchestrator_service import propose as orchestrate_propose

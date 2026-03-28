@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { postChat, ChatResponse } from "@/lib/api"
 
-export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => void, onLogin: () => void }) {
+export interface ChatSummaryPayload {
+    risk_score_final: number
+    position_ticker: string
+    position_lots: { lot_id: string; ticker: string; shares: number; cost_basis: number; acquisition_date: string }[]
+    starting_cash: number
+}
+
+export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: (payload: ChatSummaryPayload) => void, onLogin: () => void }) {
     const [step, setStep] = React.useState<'hero' | 'chat'>('hero')
 
     const [messages, setMessages] = React.useState<{ role: 'assistant' | 'user', content: string }[]>([])
@@ -69,10 +76,15 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
             }
 
             // If analysis is complete or flow ends
-            if (response.response_type === 'risk_score_complete' || response.response_type === 'analysis_result') {
+            if (response.response_type === 'summary') {
                 setIsComplete(true)
                 setTimeout(() => {
-                    onGetStarted()
+                    onGetStarted({
+                        risk_score_final: response.payload?.risk_score_final,
+                        position_ticker: response.payload?.position_ticker,
+                        position_lots: response.payload?.position_lots,
+                        starting_cash: response.payload?.starting_cash,
+                    })
                 }, 3000)
             }
         } catch (error) {
@@ -99,17 +111,23 @@ export function WelcomeLanding({ onGetStarted, onLogin }: { onGetStarted: () => 
 
             {/* Top Right Login */}
             <div className="absolute top-6 right-8 flex gap-4">
-                <button 
-                  onClick={onGetStarted}
-                  className="text-sm border border-zinc-700 hover:border-zinc-500 rounded-full py-1.5 px-3 font-medium text-zinc-400 hover:text-white transition-colors"
+                <button
+                    onClick={onGetStarted}
+                    className="text-sm border border-zinc-700 hover:border-zinc-500 rounded-full py-1.5 px-3 font-medium text-zinc-400 hover:text-white transition-colors"
                 >
-                  Skip Setup
+                    Skip Setup
                 </button>
-                <button 
-                  onClick={onLogin}
-                  className="text-sm font-medium text-zinc-400 hover:text-white transition-colors py-1.5"
+                <button
+                    onClick={onLogin}
+                    className="text-sm font-medium text-zinc-400 hover:text-white transition-colors py-1.5"
                 >
-                  Log In
+                    Skip Setup
+                </button>
+                <button
+                    onClick={onLogin}
+                    className="text-sm font-medium text-zinc-400 hover:text-white transition-colors py-1.5"
+                >
+                    Log In
                 </button>
             </div>
 
