@@ -7,14 +7,18 @@ export default function StrategyTab({ onError, inputs, setInputs, onSimulationCo
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setInputs(prev => ({ ...prev, [name]: isNaN(Number(value)) ? value : Number(value) }));
+    setInputs(prev => ({ ...prev, [name]: value === '' ? '' : (isNaN(Number(value)) ? value : Number(value)) }));
   };
 
   const handleSimulate = async () => {
     if (onSimulationStart) onSimulationStart();
     setLoading(true);
     onError(null);
-    const { data, error } = await simulatePortfolio(inputs);
+    const numericFields = ['initial_shares','unwind_cost_basis','cash','tlh_inventory',
+      'total_portfolio_value','concentrated_position_value','income_portfolio_value','model_portfolio_value'];
+    const coerced = { ...inputs };
+    numericFields.forEach(k => { if (coerced[k] === '') coerced[k] = 0; });
+    const { data, error } = await simulatePortfolio(coerced);
     if (error) {
       onError(error);
       setLoading(false);

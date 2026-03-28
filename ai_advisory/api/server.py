@@ -493,6 +493,11 @@ class ProjectionRequest(BaseModel):
     # e.g. {"1": 0.10, "2": 0.10, ...}
     unwind_schedule:    Dict[str, float] = {}
 
+    # Target concentration unwind (dynamic per-path)
+    # If set, overrides unwind_schedule
+    target_concentration_pct: Optional[float] = None   # e.g. 0.15 for 15%
+    spread_years:             int = 5                  # glide-path window
+
     # Return/vol/tax overrides — all optional, defaults applied for missing keys
     return_assumptions: Optional[Dict[str, float]] = None
 
@@ -530,6 +535,8 @@ def api_portfolio_projection(req: ProjectionRequest):
         current_cp_price=req.current_cp_price,
         horizon_years=req.horizon_years,
         unwind_schedule=req.unwind_schedule,
+        target_concentration_pct=req.target_concentration_pct,
+        spread_years=req.spread_years,
         income_preference=req.income_preference,
         return_assumptions=req.return_assumptions,
         ticker=req.ticker,

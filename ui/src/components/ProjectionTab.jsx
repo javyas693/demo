@@ -63,45 +63,46 @@ function MetricCard({ label, value, sub, accent }) {
   );
 }
 
+const TARGET_OPTIONS = [
+  { label: 'No target', value: null },
+  { label: '25%', value: 0.25 },
+  { label: '20%', value: 0.20 },
+  { label: '15%', value: 0.15 },
+  { label: '10%', value: 0.10 },
+];
+
 export default function ProjectionTab({ simulatedInputs, onError }) {
-  const [horizonYears, setHorizonYears]         = useState(20);
-  const [unwindPct, setUnwindPct]               = useState(50);
-  const [unwindYears, setUnwindYears]           = useState(5);
-  const [incomePreference, setIncomePreference] = useState(50);
-  const [cpReturn, setCpReturn]                 = useState(null);
-  const [incomeReturn, setIncomeReturn]         = useState(7);
-  const [modelReturn, setModelReturn]           = useState(8);
-  const [taxRate, setTaxRate]                   = useState(20);
-  const [showAdvanced, setShowAdvanced]         = useState(false);
-  const [result, setResult]                     = useState(null);
-  const [loading, setLoading]                   = useState(false);
+  const [horizonYears, setHorizonYears]           = useState(20);
+  const [targetConcentration, setTargetConcentration] = useState(0.15);
+  const [spreadYears, setSpreadYears]             = useState(5);
+  const [incomePreference, setIncomePreference]   = useState(50);
+  const [cpReturn, setCpReturn]                   = useState(null);
+  const [incomeReturn, setIncomeReturn]           = useState(7);
+  const [modelReturn, setModelReturn]             = useState(8);
+  const [taxRate, setTaxRate]                     = useState(20);
+  const [showAdvanced, setShowAdvanced]           = useState(false);
+  const [result, setResult]                       = useState(null);
+  const [loading, setLoading]                     = useState(false);
 
   const cp     = simulatedInputs?.concentrated_position_value || 1_200_000;
   const shares = simulatedInputs?.initial_shares || 8_000;
   const price  = cp / shares;
-  const sharesPerYear = Math.round((shares * (unwindPct / 100)) / unwindYears);
-
-  const buildSchedule = () => {
-    const frac = parseFloat(((unwindPct / 100) / unwindYears).toFixed(6));
-    const s = {};
-    for (let y = 1; y <= unwindYears; y++) s[String(y)] = frac;
-    return s;
-  };
 
   const run = useCallback(async () => {
     setLoading(true);
     setResult(null);
     const payload = {
-      cp_value:          cp,
-      income_value:      simulatedInputs?.income_portfolio_value || 0,
-      model_value:       simulatedInputs?.model_portfolio_value  || 0,
-      cash:              simulatedInputs?.cash || 0,
-      cost_basis:        simulatedInputs?.unwind_cost_basis || 15,
-      current_cp_price:  price,
-      ticker:            simulatedInputs?.ticker || 'SPY',
-      horizon_years:     horizonYears,
-      income_preference: incomePreference / 100,
-      unwind_schedule:   buildSchedule(),
+      cp_value:                 cp,
+      income_value:             simulatedInputs?.income_portfolio_value || 0,
+      model_value:              simulatedInputs?.model_portfolio_value  || 0,
+      cash:                     simulatedInputs?.cash || 0,
+      cost_basis:               simulatedInputs?.unwind_cost_basis || 15,
+      current_cp_price:         price,
+      ticker:                   simulatedInputs?.ticker || 'SPY',
+      horizon_years:            horizonYears,
+      income_preference:        incomePreference / 100,
+      target_concentration_pct: targetConcentration,
+      spread_years:             spreadYears,
       return_assumptions: {
         ...(cpReturn !== null ? { cp_annual_return: cpReturn / 100 } : {}),
         income_annual_return: incomeReturn / 100,
@@ -113,7 +114,7 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
     if (res.error) onError?.(res.error);
     else setResult(res.data);
     setLoading(false);
-  }, [simulatedInputs, horizonYears, unwindPct, unwindYears,
+  }, [simulatedInputs, horizonYears, targetConcentration, spreadYears,
       incomePreference, cpReturn, incomeReturn, modelReturn, taxRate]);
 
   const chartData = result
@@ -155,21 +156,45 @@ export default function ProjectionTab({ simulatedInputs, onError }) {
 
         <SliderRow label="How far ahead to model" value={horizonYears} min={5} max={30}
           onChange={setHorizonYears} format={v => `${v} yrs`} />
-        <SliderRow label="How much of the position to reduce" value={unwindPct} min={10} max={100} step={5}
-          onChange={setUnwindPct} format={v => `${v}%`} />
-        <SliderRow label="Spread the reduction over" value={unwindYears} min={1}
-          max={Math.min(15, horizonYears)}
-          onChange={setUnwindYears} format={v => `${v} yrs`} />
+
+        {/* Target concentration pill selector */}
+        <div className="flex items-center gap-3 mb-3">
+          <label className="text-sm text-slate-500 w-52 shrink-0">Reduce concentration to</label>
+          <div className="flex gap-2 flex-wrap">
+            {TARGET_OPTIONS.map(opt => (
+              <button
+                key={String(opt.value)}
+                onClick={() => setTargetConcentration(opt.value)}
+                className={`px-3 py-1 rounded-full text-sm font-semibold border transition-colors ${
+                  targetConcentration === opt.value
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-600 border-slate-300 hover:border-blue-400'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {targetConcentration !== null && (
+          <SliderRow label="Glide path (years to get there)" value={spreadYears} min={1}
+            max={Math.min(15, horizonYears)}
+            onChange={setSpreadYears} format={v => `${v} yrs`} />
+        )}
+
         <SliderRow label="Proceeds allocated to income" value={incomePreference} min={0} max={100}
           step={10} onChange={setIncomePreference} format={v => `${v}%`} />
 
         <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5
           text-sm text-blue-800 mb-4">
-          Selling <span className="font-bold">{unwindPct}%</span> of{' '}
-          <span className="font-bold">{shares.toLocaleString()} shares</span> over{' '}
-          {unwindYears} yrs ≈{' '}
-          <span className="font-bold">~{sharesPerYear.toLocaleString()} shares/yr</span>{' '}
-          at ${price.toFixed(2)}/share
+          {targetConcentration !== null
+            ? <>Selling each year to bring concentration below{' '}
+                <span className="font-bold">{(targetConcentration * 100).toFixed(0)}%</span>{' '}
+                over a <span className="font-bold">{spreadYears}-year</span> glide path —{' '}
+                reinvesting proceeds per your {incomePreference}% income preference.</>
+            : <>No target set — position held as-is for the full {horizonYears}-year horizon.</>
+          }
         </div>
 
         <button onClick={() => setShowAdvanced(o => !o)}

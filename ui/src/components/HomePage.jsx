@@ -77,17 +77,17 @@ function OnboardingCard({ inputs, setInputs, onSimulate, loading, error }) {
             <Field label="Stock ticker" type="text" value={inputs.ticker}
               onChange={v => setInputs(p => ({ ...p, ticker: v.toUpperCase() }))} placeholder="AAPL" />
             <Field label="Shares held" type="number" value={inputs.initial_shares}
-              onChange={v => setInputs(p => ({ ...p, initial_shares: Number(v) }))} placeholder="8000" />
+              onChange={v => setInputs(p => ({ ...p, initial_shares: v === '' ? '' : Number(v) }))} placeholder="8000" />
           </div>
           <Field label="Cost basis per share ($)" type="number" value={inputs.unwind_cost_basis}
-            onChange={v => setInputs(p => ({ ...p, unwind_cost_basis: Number(v) }))} placeholder="15.00" />
+            onChange={v => setInputs(p => ({ ...p, unwind_cost_basis: v === '' ? '' : Number(v) }))} placeholder="15.00" />
           <Field label="Total portfolio value ($)" type="number" value={inputs.total_portfolio_value}
-            onChange={v => setInputs(p => ({ ...p, total_portfolio_value: Number(v), concentrated_position_value: Number(v) - (inputs.cash || 50000) }))}
+            onChange={v => setInputs(p => ({ ...p, total_portfolio_value: v === '' ? '' : Number(v), concentrated_position_value: v === '' ? '' : Number(v) - (p.cash || 50000) }))}
             placeholder="1250000" />
           <Field label="Existing tax losses ($)" type="number" value={inputs.tlh_inventory}
-            onChange={v => setInputs(p => ({ ...p, tlh_inventory: Number(v) }))} placeholder="250000" />
+            onChange={v => setInputs(p => ({ ...p, tlh_inventory: v === '' ? '' : Number(v) }))} placeholder="250000" />
           <Field label="Investment horizon (years)" type="number" value={inputs.horizon_years}
-            onChange={v => setInputs(p => ({ ...p, horizon_years: Number(v) }))} placeholder="3" />
+            onChange={v => setInputs(p => ({ ...p, horizon_years: v === '' ? '' : Number(v) }))} placeholder="3" />
         </div>
 
         {error && (
@@ -438,9 +438,13 @@ export default function HomePage({
     setLoading(true);
     setError(null);
     try {
+      const numericFields = ['initial_shares','unwind_cost_basis','cash','tlh_inventory',
+        'total_portfolio_value','concentrated_position_value','income_portfolio_value','model_portfolio_value','horizon_years'];
+      const coerced = { ...inputs };
+      numericFields.forEach(k => { if (coerced[k] === '') coerced[k] = 0; });
       const payload = {
-        ...inputs,
-        horizon_months: (inputs.horizon_years || 1) * 12,
+        ...coerced,
+        horizon_months: (coerced.horizon_years || 1) * 12,
         gate_overrides: {},
       };
       const res = await fetch('http://localhost:8000/api/portfolio/simulate', {

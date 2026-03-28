@@ -4,11 +4,14 @@ from typing import Optional
 from ai_advisory.projection.defaults import merge_assumptions, fit_cp_assumptions
 from ai_advisory.projection.monte_carlo import (
     generate_gbm_paths, extract_percentiles,
-    apply_unwind_to_paths, combine_sleeve_paths,
+    apply_unwind_to_paths, apply_target_unwind_to_paths, combine_sleeve_paths,
 )
 
 def run_projection(cp_value, income_value, model_value, cash, cost_basis,
-                   current_cp_price, horizon_years, unwind_schedule,
+                   current_cp_price, horizon_years,
+                   unwind_schedule=None,
+                   target_concentration_pct=None,
+                   spread_years=5,
                    income_preference=0.5, return_assumptions=None,
                    ticker=None, cp_price_series=None, seed=42):
     assumptions = merge_assumptions(return_assumptions)
@@ -20,11 +23,11 @@ def run_projection(cp_value, income_value, model_value, cash, cost_basis,
         assumptions["cp_annual_return"] = cp_fit["cp_annual_return"]
         assumptions["cp_annual_vol"]    = cp_fit["cp_annual_vol"]
 
-    n_months = horizon_years * 12
-    n_sims   = int(assumptions["simulations"])
-    tax_rate = float(assumptions["tax_rate"])
-    unwind_norm = {int(k): float(v) for k, v in unwind_schedule.items()
-                   if float(v) > 0 and int(k) <= horizon_years}
+    n_months    = horizon_years * 12
+    n_sims      = int(assumptions["simulations"])
+    tax_rate    = float(assumptions["tax_rate"])
+    income_frac = float(income_preference)
+    model_frac  = 1.0 - income_frac
     rng = np.random.default_rng(seed)
 
     cp_raw     = generate_gbm_paths(cp_value,     assumptions["cp_annual_return"],
@@ -34,43 +37,56 @@ def run_projection(cp_value, income_value, model_value, cash, cost_basis,
     model_raw  = generate_gbm_paths(model_value,  assumptions["model_annual_return"],
                                     assumptions["model_annual_vol"],  n_months, n_sims, rng)
 
-    cp_paths, proceeds_paths, tax_paths = apply_unwind_to_paths(
-        cp_raw, unwind_norm, n_months, tax_rate, cost_basis, current_cp_price)
+    if target_concentration_pct is not None:
+        # Dynamic per-path unwind: sell each year to close gap toward target
+        cp_paths, income_paths, model_paths, proceeds_paths, tax_paths = \
+            apply_target_unwind_to_paths(
+                cp_raw, income_raw, model_raw, cash,
+                target_concentration=float(target_concentration_pct),
+                spread_years=int(spread_years),
+                n_months=n_months,
+                tax_rate=tax_rate,
+                cost_basis_per_share=cost_basis,
+                current_price=current_cp_price,
+                income_annual_return=assumptions["income_annual_return"],
+                income_annual_vol=assumptions["income_annual_vol"],
+                model_annual_return=assumptions["model_annual_return"],
+                model_annual_vol=assumptions["model_annual_vol"],
+                income_frac=income_frac,
+                model_frac=model_frac,
+                rng=rng,
+            )
+    else:
+        # Legacy fixed schedule unwind
+        unwind_norm = {int(k): float(v) for k, v in (unwind_schedule or {}).items()
+                       if float(v) > 0 and int(k) <= horizon_years}
 
-    income_paths = income_raw.copy()
-    model_paths  = model_raw.copy()
-    income_frac  = float(income_preference)
-    model_frac   = 1.0 - income_frac
+        cp_paths, proceeds_paths, tax_paths = apply_unwind_to_paths(
+            cp_raw, unwind_norm, n_months, tax_rate, cost_basis, current_cp_price)
 
-    for year, fraction in unwind_norm.items():
-        month_idx = year * 12
-        if month_idx > n_months:
-            continue
+        income_paths = income_raw.copy()
+        model_paths  = model_raw.copy()
 
-        net           = proceeds_paths[:, month_idx]   # (n_sims,)
-        income_inject = net * income_frac              # (n_sims,)
-        model_inject  = net * model_frac               # (n_sims,)
-        remaining     = n_months - month_idx
-
-        if remaining <= 0:
-            income_paths[:, month_idx] += income_inject
-            model_paths[:,  month_idx] += model_inject
-            continue
-
-        # Generate fresh GBM growth factors from month_idx forward.
-        # start_value=1.0 gives a pure growth multiplier path.
-        income_growth = generate_gbm_paths(
-            1.0, assumptions["income_annual_return"],
-            assumptions["income_annual_vol"], remaining, n_sims, rng
-        )  # shape (n_sims, remaining+1), col 0 = 1.0
-        model_growth = generate_gbm_paths(
-            1.0, assumptions["model_annual_return"],
-            assumptions["model_annual_vol"], remaining, n_sims, rng
-        )
-
-        # Compound injected capital: inject * growth_factor at each future step
-        income_paths[:, month_idx:] += income_inject[:, np.newaxis] * income_growth
-        model_paths[:,  month_idx:] += model_inject[:, np.newaxis]  * model_growth
+        for year, fraction in unwind_norm.items():
+            month_idx = year * 12
+            if month_idx > n_months:
+                continue
+            net           = proceeds_paths[:, month_idx]
+            income_inject = net * income_frac
+            model_inject  = net * model_frac
+            remaining     = n_months - month_idx
+            if remaining <= 0:
+                income_paths[:, month_idx] += income_inject
+                model_paths[:,  month_idx] += model_inject
+                continue
+            income_growth = generate_gbm_paths(
+                1.0, assumptions["income_annual_return"],
+                assumptions["income_annual_vol"], remaining, n_sims, rng)
+            model_growth = generate_gbm_paths(
+                1.0, assumptions["model_annual_return"],
+                assumptions["model_annual_vol"], remaining, n_sims, rng)
+            income_paths[:, month_idx:] += income_inject[:, np.newaxis] * income_growth
+            model_paths[:,  month_idx:] += model_inject[:, np.newaxis]  * model_growth
 
     total_paths   = combine_sleeve_paths(cp_paths, income_paths, model_paths, cash)
     cum_tax_paths = np.cumsum(tax_paths, axis=1)
