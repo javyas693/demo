@@ -203,7 +203,7 @@ class ChatSessionManager:
                 "responding_agent": "orchestrator",
             },
             metadata={
-                "responding_agent": responding_agent,
+                "responding_agent": "orchestrator",
                 "parse_status": "fallback",
             },
         )

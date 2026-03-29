@@ -19,6 +19,7 @@ WHY A SUB-AGENT (not AgentTool):
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 from google.adk.tools.tool_context import ToolContext
+from google.adk.models.anthropic_llm import AnthropicLlm
 
 from ai_advisory.shared.state_keys import (
     POSITION_DATA_COMPLETE, POSITION_LOTS, POSITION_TICKER,
@@ -175,7 +176,7 @@ will now analyze their options.
 
 position_gatherer_agent = Agent(
     name="position_gatherer",
-    model="gemini-2.5-flash",
+    model=AnthropicLlm(model="claude-sonnet-4-6", max_tokens=8192, temperature=0),
     description=(
         "Collects detailed information about a user's concentrated stock position "
         "through multi-turn conversation. Gathers ticker, lot details (shares, "

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowRight, Send } from 'lucide-react';
 
 // ── Palette (dark warm theme) ────────────────────────────
 const C = {
@@ -27,88 +27,176 @@ const fmt = (v) => {
   return '$' + Math.round(v).toLocaleString();
 };
 
-// ── Field input (dark styled) ────────────────────────────
-function Field({ label, type, value, onChange, placeholder }) {
+
+// ── Typing indicator ─────────────────────────────────────
+function TypingDots() {
   return (
-    <div>
-      <label style={{
-        color: C.muted, fontSize: '0.7rem', fontWeight: 700,
-        display: 'block', marginBottom: '0.375rem',
-        textTransform: 'uppercase', letterSpacing: '0.07em',
-      }}>
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{
-          background: C.bg, border: `1px solid ${C.cardBorder}`,
-          borderRadius: '0.625rem', color: C.cream,
-          padding: '0.625rem 0.875rem', width: '100%',
-          fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box',
-        }}
-      />
+    <div style={{ display: 'flex', gap: '4px', padding: '2px 0' }}>
+      {[0, 1, 2].map(i => (
+        <div key={i} style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: C.muted,
+          animation: 'bounce 1.2s infinite',
+          animationDelay: `${i * 0.2}s`,
+        }} />
+      ))}
+      <style>{`
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40% { transform: translateY(-5px); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
 
-// ── Onboarding card (no simulation yet) ─────────────────
-function OnboardingCard({ inputs, setInputs, onSimulate, loading, error }) {
+// ── Chat onboarding card ──────────────────────────────────
+function OnboardingCard({ onSimulate, error }) {
+  const [messages, setMessages]       = useState([]);
+  const [input, setInput]             = useState('');
+  const [conversationId, setConversationId] = useState(null);
+  const [isTyping, setIsTyping]       = useState(false);
+  const [started, setStarted]         = useState(false);
+  const bottomRef                     = useRef(null);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  const sendMessage = async (text) => {
+    if (!text.trim() || isTyping) return;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    setIsTyping(true);
+    try {
+      const res = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, conversation_id: conversationId }),
+      });
+      const data = await res.json();
+      const convId = data.conversation_id || conversationId;
+      if (!conversationId) setConversationId(convId);
+      setMessages(prev => [...prev, { role: 'assistant', content: data.agent_message, responseType: data.response_type }]);
+
+      // When chatbot has everything — kick off simulation
+      if (data.response_type === 'summary' && data.payload) {
+        onSimulate(data.payload);
+      }
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.', responseType: 'error' }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleStart = () => {
+    setStarted(true);
+    sendMessage('Hello');
+  };
+
   return (
     <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
       <div style={{
         background: C.card, border: `1px solid ${C.cardBorder}`,
-        borderRadius: '1.5rem', width: '100%', maxWidth: '480px',
-        padding: '2.5rem', boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
+        borderRadius: '1.5rem', width: '100%', maxWidth: '520px',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontFamily: serif, color: C.gold, fontSize: '1.875rem', fontWeight: 700, margin: 0 }}>
+        {/* Header */}
+        <div style={{ padding: '1.75rem 2rem 1.25rem', borderBottom: `1px solid ${C.cardBorder}` }}>
+          <h1 style={{ fontFamily: serif, color: C.gold, fontSize: '1.75rem', fontWeight: 700, margin: 0 }}>
             AI Advisory
           </h1>
-          <p style={{ color: C.muted, marginTop: '0.5rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
-            Tell us about your position and we'll build your personalized strategy.
+          <p style={{ color: C.muted, marginTop: '0.35rem', fontSize: '0.85rem', lineHeight: 1.5 }}>
+            Your personal advisor for managing concentrated positions.
           </p>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <Field label="Stock ticker" type="text" value={inputs.ticker}
-              onChange={v => setInputs(p => ({ ...p, ticker: v.toUpperCase() }))} placeholder="AAPL" />
-            <Field label="Shares held" type="number" value={inputs.initial_shares}
-              onChange={v => setInputs(p => ({ ...p, initial_shares: v === '' ? '' : Number(v) }))} placeholder="8000" />
+        {!started ? (
+          /* Welcome state */
+          <div style={{ padding: '2.5rem 2rem', textAlign: 'center' }}>
+            <p style={{ color: C.cream, fontSize: '1rem', lineHeight: 1.7, marginBottom: '2rem', fontFamily: serifBody }}>
+              I'll ask you a few questions about your position and risk preferences, then build your personalized strategy.
+            </p>
+            <button onClick={handleStart} style={{
+              background: C.gold, color: C.bg, border: 'none',
+              borderRadius: '0.75rem', padding: '0.875rem 2rem',
+              fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer',
+              width: '100%', transition: 'opacity 0.2s',
+            }}>
+              Get started →
+            </button>
           </div>
-          <Field label="Cost basis per share ($)" type="number" value={inputs.unwind_cost_basis}
-            onChange={v => setInputs(p => ({ ...p, unwind_cost_basis: v === '' ? '' : Number(v) }))} placeholder="15.00" />
-          <Field label="Total portfolio value ($)" type="number" value={inputs.total_portfolio_value}
-            onChange={v => setInputs(p => ({ ...p, total_portfolio_value: v === '' ? '' : Number(v), concentrated_position_value: v === '' ? '' : Number(v) - (p.cash || 50000) }))}
-            placeholder="1250000" />
-          <Field label="Existing tax losses ($)" type="number" value={inputs.tlh_inventory}
-            onChange={v => setInputs(p => ({ ...p, tlh_inventory: v === '' ? '' : Number(v) }))} placeholder="250000" />
-          <Field label="Investment horizon (years)" type="number" value={inputs.horizon_years}
-            onChange={v => setInputs(p => ({ ...p, horizon_years: v === '' ? '' : Number(v) }))} placeholder="3" />
-        </div>
+        ) : (
+          <>
+            {/* Message thread */}
+            <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', maxHeight: '380px', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              {messages.map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <div style={{
+                    maxWidth: '82%',
+                    background: m.role === 'user' ? C.goldDim : C.surface,
+                    border: `1px solid ${m.role === 'user' ? 'transparent' : C.cardBorder}`,
+                    borderRadius: m.role === 'user' ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
+                    padding: '0.625rem 0.875rem',
+                    color: m.role === 'user' ? C.cream : C.cream,
+                    fontSize: '0.875rem', lineHeight: 1.6,
+                    fontFamily: serifBody,
+                  }}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {isTyping && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{ background: C.surface, border: `1px solid ${C.cardBorder}`, borderRadius: '1rem 1rem 1rem 0.25rem', padding: '0.625rem 0.875rem' }}>
+                    <TypingDots />
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input bar */}
+            <div style={{ padding: '1rem 1.5rem', borderTop: `1px solid ${C.cardBorder}`, display: 'flex', gap: '0.625rem' }}>
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
+                placeholder="Type your reply…"
+                disabled={isTyping}
+                style={{
+                  flex: 1, background: C.bg, border: `1px solid ${C.cardBorder}`,
+                  borderRadius: '0.625rem', color: C.cream, padding: '0.625rem 0.875rem',
+                  fontSize: '0.875rem', outline: 'none',
+                  opacity: isTyping ? 0.5 : 1,
+                }}
+              />
+              <button
+                onClick={() => sendMessage(input)}
+                disabled={isTyping || !input.trim()}
+                style={{
+                  background: input.trim() && !isTyping ? C.gold : C.cardBorder,
+                  color: input.trim() && !isTyping ? C.bg : C.muted,
+                  border: 'none', borderRadius: '0.625rem',
+                  padding: '0 1rem', cursor: input.trim() && !isTyping ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.2s',
+                }}
+              >
+                <Send size={16} />
+              </button>
+            </div>
+          </>
+        )}
 
         {error && (
-          <div style={{ marginTop: '1rem', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '0.625rem', padding: '0.75rem 1rem', color: '#f87171', fontSize: '0.8rem' }}>
+          <div style={{ margin: '0 1.5rem 1rem', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '0.625rem', padding: '0.75rem 1rem', color: '#f87171', fontSize: '0.8rem' }}>
             {error}
           </div>
         )}
-
-        <button
-          onClick={onSimulate}
-          disabled={loading}
-          style={{
-            background: loading ? C.cardBorder : C.gold,
-            color: loading ? C.muted : C.bg,
-            borderRadius: '0.75rem', marginTop: '1.75rem', width: '100%',
-            padding: '0.875rem', fontWeight: 700, fontSize: '0.925rem',
-            cursor: loading ? 'not-allowed' : 'pointer', border: 'none',
-            transition: 'background 0.2s',
-          }}>
-          {loading ? 'Analyzing your position…' : 'Analyze my position →'}
-        </button>
       </div>
     </div>
   );
@@ -429,22 +517,38 @@ export default function HomePage({
   timeline, monthlyIntelligence, simulatedInputs,
   inputs, setInputs, onSimulationComplete, onNavigate,
 }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
+  const [error, setError] = useState(null);
 
   const hasSimulation = timeline && timeline.length > 0;
 
-  const handleSimulate = async () => {
-    setLoading(true);
+  const handleSimulate = async (chatPayload) => {
     setError(null);
     try {
-      const numericFields = ['initial_shares','unwind_cost_basis','cash','tlh_inventory',
-        'total_portfolio_value','concentrated_position_value','income_portfolio_value','model_portfolio_value','horizon_years'];
-      const coerced = { ...inputs };
-      numericFields.forEach(k => { if (coerced[k] === '') coerced[k] = 0; });
+      // Build simulation inputs from chatbot summary payload
+      const lots   = chatPayload.position_lots || chatPayload.lots || [];
+      const ticker = chatPayload.position_ticker || chatPayload.ticker || inputs.ticker;
+      const totalShares    = lots.reduce((s, l) => s + (l.shares || 0), 0);
+      const avgCostBasis   = lots.length
+        ? lots.reduce((s, l) => s + (l.cost_basis || 0) * (l.shares || 0), 0) / (totalShares || 1)
+        : inputs.unwind_cost_basis;
+      const cash           = chatPayload.starting_cash ?? inputs.cash;
+      const riskScore      = chatPayload.risk_score_final ?? inputs.risk_score;
+
+      const merged = {
+        ...inputs,
+        ticker,
+        initial_shares:              totalShares || inputs.initial_shares,
+        unwind_cost_basis:           avgCostBasis,
+        cash,
+        risk_score:                  riskScore,
+        total_portfolio_value:       inputs.total_portfolio_value,
+        concentrated_position_value: inputs.concentrated_position_value,
+      };
+      setInputs(merged);
+
       const payload = {
-        ...coerced,
-        horizon_months: (coerced.horizon_years || 1) * 12,
+        ...merged,
+        horizon_months: (merged.horizon_years || 1) * 12,
         gate_overrides: {},
       };
       const res = await fetch('http://localhost:8000/api/portfolio/simulate', {
@@ -457,13 +561,11 @@ export default function HomePage({
       onSimulationComplete(data);
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
   if (!hasSimulation) {
-    return <OnboardingCard inputs={inputs} setInputs={setInputs} onSimulate={handleSimulate} loading={loading} error={error} />;
+    return <OnboardingCard onSimulate={handleSimulate} error={error} />;
   }
 
   return (

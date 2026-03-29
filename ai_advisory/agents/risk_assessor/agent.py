@@ -7,6 +7,7 @@ Outputs strict JSON envelope on every response.
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 from google.adk.tools.tool_context import ToolContext
+from google.adk.models.anthropic_llm import AnthropicLlm
 
 import sys, os
 #sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
@@ -180,7 +181,7 @@ Include the exact tool output as risk_score_result in the payload.
 
 risk_assessor_agent = Agent(
     name="risk_assessor",
-    model="gemini-2.5-flash",
+    model=AnthropicLlm(model="claude-sonnet-4-6", max_tokens=8192, temperature=0),
     description=(
         "First point of contact for the financial advisor. Welcomes the user, "
         "conducts a multi-turn risk assessment (3 questions), maps answers to "
