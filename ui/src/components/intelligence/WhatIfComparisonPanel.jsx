@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 const GATES = [
@@ -75,7 +75,7 @@ export default function WhatIfComparisonPanel({
     if (val === 0) return '$0';
     if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}m`;
     if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}k`;
-    return `$${val}`;
+    return `$${Number(val).toFixed(2)}`;
   };
 
   // Metrics calculation
