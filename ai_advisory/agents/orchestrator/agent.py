@@ -383,12 +383,40 @@ class ChatSessionManager:
           )
         if envelope.metadata is None:
             envelope.metadata = {}
-        
+
         # Include chain history so the UI knows a transition happened
         if chain_history:
             envelope.metadata["auto_chain_history"] = chain_history
             envelope.metadata["auto_chained"] = True
             envelope.metadata["chain_depth"] = len(chain_history)
+
+        # ── Enrich summary payload from session state (ground truth) ─────────
+        # The LLM may omit or mis-copy fields; state always has the real values.
+        if envelope.response_type == "summary":
+            try:
+                refreshed = await self.session_service.get_session(
+                    session_id=conversation_id,
+                    app_name=APP_NAME,
+                    user_id=user_id,
+                )
+                if refreshed and refreshed.state:
+                    st = refreshed.state
+                    if envelope.payload is None:
+                        envelope.payload = {}
+                    envelope.payload["position_ticker"]  = st.get("position_ticker")
+                    envelope.payload["position_lots"]    = st.get("position_lots")
+                    envelope.payload["starting_cash"]    = st.get("starting_cash")
+                    envelope.payload["risk_score_final"] = st.get("risk_score_final")
+                    envelope.payload["user_name"]        = st.get("user_name")
+                    logger.info(
+                        "Enriched summary payload from state: ticker=%s lots=%d cash=%s risk=%s",
+                        st.get("position_ticker"),
+                        len(st.get("position_lots") or []),
+                        st.get("starting_cash"),
+                        st.get("risk_score_final"),
+                    )
+            except Exception as enrich_err:
+                logger.warning("Could not enrich summary payload from state: %s", enrich_err)
 
         return envelope
 # ── Helpers ──────────────────────────────────────────────────────────────────
