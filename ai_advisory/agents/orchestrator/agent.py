@@ -307,8 +307,39 @@ class ChatSessionManager:
             if event.is_final_response():
                 if event.content and event.content.parts:
                     raw_response = event.content.parts[0].text
+
+        # When a sub-agent escalates via tool, ADK may not emit text on that
+        # turn — raw_response stays empty and parse fails. Recover by reading
+        # session state and synthesising the correct transition envelope so the
+        # auto-chain can proceed normally.
         if not raw_response:
-            logger.warning("run_agent_turn: no text in final event for conversation %s", conversation_id)
+            logger.warning(
+                "run_agent_turn: no text in final event for conversation %s — "
+                "checking session state to synthesise transition response",
+                conversation_id,
+            )
+            try:
+                sess = await self.session_service.get_session(
+                    session_id=session_id, app_name=APP_NAME, user_id=user_id
+                )
+                st = (sess.state or {}) if sess else {}
+                if st.get("position_data_complete"):
+                    raw_response = json.dumps({
+                        "response_type": "position_confirmed",
+                        "agent_message": "Your position data has been saved.",
+                        "payload": {},
+                    })
+                    logger.info("Synthesised position_confirmed for conversation %s", conversation_id)
+                elif st.get("risk_assessment_complete"):
+                    raw_response = json.dumps({
+                        "response_type": "risk_score_complete",
+                        "agent_message": "Risk assessment complete.",
+                        "payload": {},
+                    })
+                    logger.info("Synthesised risk_score_complete for conversation %s", conversation_id)
+            except Exception as synth_err:
+                logger.warning("Could not synthesise transition response: %s", synth_err)
+
         result_payload = self.parse_and_validate(raw_response, conversation_id)
         return result_payload, result_payload.response_type
 
