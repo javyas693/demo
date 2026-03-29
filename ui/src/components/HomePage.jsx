@@ -705,8 +705,13 @@ export default function HomePage({
       const avgCostBasis   = lots.length
         ? lots.reduce((s, l) => s + (l.cost_basis || 0) * (l.shares || 0), 0) / (totalShares || 1)
         : inputs.unwind_cost_basis;
-      const cash           = chatPayload.starting_cash ?? inputs.cash;
-      const riskScore      = chatPayload.risk_score_final ?? inputs.risk_score;
+      const cash             = chatPayload.starting_cash ?? inputs.cash;
+      const riskScore        = chatPayload.risk_score_final ?? inputs.risk_score;
+      // income_preference is the inverse of risk: conservative → income-heavy, aggressive → growth-heavy
+      const incomePreference = Math.round(100 - riskScore);
+      const cpValue          = totalShares * avgCostBasis;  // cost-basis proxy for CP value
+      const horizonYears     = chatPayload.horizon_years ?? inputs.horizon_years;
+      const tlhInventory     = chatPayload.tlh_inventory ?? 0;
 
       const merged = {
         ...inputs,
@@ -715,8 +720,11 @@ export default function HomePage({
         unwind_cost_basis:           avgCostBasis,
         cash,
         risk_score:                  riskScore,
-        total_portfolio_value:       inputs.total_portfolio_value,
-        concentrated_position_value: inputs.concentrated_position_value,
+        income_preference:           incomePreference,
+        concentrated_position_value: cpValue || inputs.concentrated_position_value,
+        total_portfolio_value:       (cpValue || inputs.concentrated_position_value) + cash,
+        horizon_years:               horizonYears,
+        tlh_inventory:               tlhInventory,
       };
       setInputs(merged);
 

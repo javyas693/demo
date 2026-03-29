@@ -439,12 +439,16 @@ class ChatSessionManager:
                     envelope.payload["starting_cash"]    = st.get("starting_cash")
                     envelope.payload["risk_score_final"] = st.get("risk_score_final")
                     envelope.payload["user_name"]        = st.get("user_name")
+                    envelope.payload["horizon_years"]    = st.get("horizon_years")
+                    envelope.payload["tlh_inventory"]    = st.get("tlh_inventory", 0.0)
                     logger.info(
-                        "Enriched summary payload from state: ticker=%s lots=%d cash=%s risk=%s",
+                        "Enriched summary payload from state: ticker=%s lots=%d cash=%s risk=%s horizon=%s tlh=%s",
                         st.get("position_ticker"),
                         len(st.get("position_lots") or []),
                         st.get("starting_cash"),
                         st.get("risk_score_final"),
+                        st.get("horizon_years"),
+                        st.get("tlh_inventory"),
                     )
             except Exception as enrich_err:
                 logger.warning("Could not enrich summary payload from state: %s", enrich_err)

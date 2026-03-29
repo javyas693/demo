@@ -27,6 +27,8 @@ POSITION_TICKER = "position_ticker"                          # str — primary t
 POSITION_CURRENT_PRICE = "position_current_price"            # float — fetched market price
 HAS_CONCENTRATED_POSITION = "has_concentrated_position"      # bool
 STARTING_CASH = "starting_cash"                              # float — user's starting cash
+HORIZON_YEARS = "horizon_years"                              # int   — investment horizon in years
+TLH_INVENTORY = "tlh_inventory"                              # float — existing tax loss balance (0 if none)
 
 # ── Position Analysis Results ────────────────────────────────────────────────
 UNWIND_ANALYSIS_COMPLETE = "unwind_analysis_complete"        # bool

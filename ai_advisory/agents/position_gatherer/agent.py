@@ -24,6 +24,7 @@ from google.adk.models.anthropic_llm import AnthropicLlm
 from ai_advisory.shared.state_keys import (
     POSITION_DATA_COMPLETE, POSITION_LOTS, POSITION_TICKER,
     HAS_CONCENTRATED_POSITION, CURRENT_PHASE, STARTING_CASH,
+    HORIZON_YEARS, TLH_INVENTORY,
 )
 from ai_advisory.shared.response_schema import (
     RESPONSE_FORMAT_INSTRUCTION,
@@ -37,6 +38,8 @@ def save_position_data_and_escalate(
     lots: list[dict],
     has_concentrated_position: bool,
     starting_cash: float,
+    horizon_years: int,
+    tlh_inventory: float,
     tool_context: ToolContext,
 ) -> dict:
     """
@@ -53,6 +56,8 @@ def save_position_data_and_escalate(
               - acquisition_date (str): in YYYY-MM-DD format
         has_concentrated_position: True if user confirmed a concentrated position.
         starting_cash: The amount of cash the user has in their brokerage account.
+        horizon_years: How many years the user is planning for (e.g. 5).
+        tlh_inventory: Existing tax loss balance in dollars (0.0 if none).
     """
     required_fields = {"lot_id", "ticker", "shares", "cost_basis", "acquisition_date"}
     for i, lot in enumerate(lots):
@@ -67,6 +72,8 @@ def save_position_data_and_escalate(
     tool_context.state[POSITION_LOTS] = lots
     tool_context.state[HAS_CONCENTRATED_POSITION] = has_concentrated_position
     tool_context.state[STARTING_CASH] = starting_cash
+    tool_context.state[HORIZON_YEARS] = int(horizon_years)
+    tool_context.state[TLH_INVENTORY] = float(tlh_inventory)
     tool_context.state[POSITION_DATA_COMPLETE] = True
     tool_context.state[CURRENT_PHASE] = "position_data_complete"
 
@@ -74,7 +81,12 @@ def save_position_data_and_escalate(
 
     return {
         "status": "success",
-        "message": f"Saved {len(lots)} lot(s) for {ticker} and starting cash of ${starting_cash:,.2f}. Escalating to orchestrator.",
+        "message": (
+            f"Saved {len(lots)} lot(s) for {ticker}, "
+            f"cash ${starting_cash:,.2f}, "
+            f"horizon {horizon_years} years, "
+            f"TLH ${tlh_inventory:,.2f}. Escalating to orchestrator."
+        ),
         "lots_saved": len(lots),
     }
 
@@ -156,8 +168,25 @@ Ask the user how much cash they have in their brokerage account.
 response_type: "position_question"
 payload.progress.status: "collecting_starting_cash"
 
-**Step 6 — Save and escalate:**
-Once confirmed, call `save_position_data_and_escalate` with structured lot data and starting cash.
+**Step 6 — Collect investment horizon:**
+Ask how many years they are planning for.
+"Are you thinking about a 5-year plan, 10 years, longer?"
+Accept natural answers ("about 7 years", "until retirement in 10 years") and round to
+the nearest whole number.
+
+response_type: "position_question"
+payload.progress.status: "collecting_horizon"
+
+**Step 7 — Collect existing tax loss inventory:**
+Ask if they have any existing tax losses already realized in this account.
+"Do you have any existing tax losses carried forward in this account? If not, no worries — we'll start fresh."
+If they say no or are unsure, use 0.
+
+response_type: "position_question"
+payload.progress.status: "collecting_tlh"
+
+**Step 8 — Save and escalate:**
+Call `save_position_data_and_escalate` with all collected data.
 Assign lot_ids as "lot_1", "lot_2", etc.
 
 response_type: "position_confirmed"
