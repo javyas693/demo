@@ -732,7 +732,7 @@ export default function HomePage({
       });
       if (!res.ok) throw new Error('Simulation failed — check that the backend is running.');
       const data = await res.json();
-      onSimulationComplete(data);
+      onSimulationComplete(data, merged);
     } catch (err) {
       setError(err.message);
     }

@@ -57,12 +57,14 @@ export default function App() {
     }
   };
 
-  const handleSimulationComplete = (timelineData) => {
+  const handleSimulationComplete = (timelineData, mergedInputs) => {
     setTimeline(timelineData.timeline);
     setTimelineSeries(timelineData.timeline_series);
     setMonthlyIntelligence(timelineData.monthly_intelligence || []);
     setMonthlyIntelligenceWhatif(null);
-    setSimulatedInputs({ ...inputs });
+    // Use mergedInputs when provided (chatbot flow) — inputs state hasn't
+    // updated yet at this point because setInputs is async.
+    setSimulatedInputs(mergedInputs ? { ...mergedInputs } : { ...inputs });
     // Stay on home — the login card will now render with data
   };
 
