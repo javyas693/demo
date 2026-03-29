@@ -28,6 +28,166 @@ const fmt = (v) => {
 };
 
 
+// ── Risk profile helper ───────────────────────────────────
+// Score 1–100: higher = more aggressive / growth-oriented
+function getRiskProfile(score) {
+  if (score >= 81) return {
+    label: 'Aggressive',
+    color: '#f87171',
+    portfolioType: 'growth-focused portfolio',
+    transitionYears: '2–4',
+  };
+  if (score >= 61) return {
+    label: 'Moderately Aggressive',
+    color: '#fb923c',
+    portfolioType: 'growth-oriented portfolio with income generation',
+    transitionYears: '3–5',
+  };
+  if (score >= 41) return {
+    label: 'Moderate',
+    color: '#c9a84c',
+    portfolioType: 'balanced income and growth portfolio',
+    transitionYears: '4–6',
+  };
+  if (score >= 21) return {
+    label: 'Moderately Conservative',
+    color: '#93c5fd',
+    portfolioType: 'income-focused portfolio with steady long-term growth',
+    transitionYears: '5–8',
+  };
+  return {
+    label: 'Conservative',
+    color: '#6ee7b7',
+    portfolioType: 'income-focused, capital-preservation portfolio',
+    transitionYears: '7–10',
+  };
+}
+
+// ── Plan briefing card ────────────────────────────────────
+function PlanBriefingCard({ planData, onBegin }) {
+  const lots        = planData.position_lots || planData.lots || [];
+  const ticker      = planData.position_ticker || planData.ticker || '';
+  const riskScore   = planData.risk_score_final ?? 50;
+  const totalShares = lots.reduce((s, l) => s + (l.shares || 0), 0);
+  const totalCost   = lots.reduce((s, l) => s + (l.shares || 0) * (l.cost_basis || 0), 0);
+  const avgBasis    = totalShares > 0 ? totalCost / totalShares : 0;
+  const profile     = getRiskProfile(riskScore);
+  const [startYear, endYear] = profile.transitionYears.split('–').map(Number);
+
+  return (
+    <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+      <div style={{
+        background: C.card, border: `1px solid ${C.cardBorder}`,
+        borderRadius: '1.5rem', width: '100%', maxWidth: '520px',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.6)', overflow: 'hidden',
+      }}>
+
+        {/* Header */}
+        <div style={{ padding: '1.75rem 2rem 1.25rem', borderBottom: `1px solid ${C.cardBorder}` }}>
+          <h1 style={{ fontFamily: serif, color: C.gold, fontSize: '1.75rem', fontWeight: 700, margin: 0 }}>
+            AI Advisory
+          </h1>
+          <p style={{ color: C.muted, marginTop: '0.35rem', fontSize: '0.85rem' }}>
+            Your personalized plan is ready.
+          </p>
+        </div>
+
+        <div style={{ padding: '1.75rem 2rem 2rem' }}>
+
+          {/* Risk badge + score */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <div style={{
+              background: `${profile.color}1a`,
+              border: `1px solid ${profile.color}50`,
+              borderRadius: '2rem', padding: '0.35rem 1rem',
+              color: profile.color, fontSize: '0.78rem', fontWeight: 700,
+            }}>
+              {profile.label}
+            </div>
+            <div style={{ color: C.muted, fontSize: '0.8rem' }}>
+              Risk score {Math.round(riskScore)}
+            </div>
+          </div>
+
+          {/* Narrative */}
+          <p style={{ color: '#d4c5a0', fontFamily: serifBody, fontSize: '1rem', lineHeight: 1.8, marginBottom: '1.75rem' }}>
+            You hold{' '}
+            <span style={{ color: C.gold, fontWeight: 600 }}>
+              {totalShares.toLocaleString()} shares of {ticker}
+            </span>
+            {avgBasis > 0 ? ` at an average cost basis of ${fmt(avgBasis)} per share` : ''}.{' '}
+            Based on your {profile.label.toLowerCase()} profile, we'll gradually transition this
+            concentrated position into a{' '}
+            <span style={{ color: C.cream, fontWeight: 600 }}>{profile.portfolioType}</span> — spread
+            over {profile.transitionYears} years to minimize taxes and timing risk.
+          </p>
+
+          {/* Journey arc */}
+          <div style={{ marginBottom: '1.75rem' }}>
+            <div style={{ color: C.muted, fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1.1rem' }}>
+              Your journey
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ textAlign: 'center', flex: '0 0 90px' }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.red, margin: '0 auto 0.5rem' }} />
+                <div style={{ color: C.red, fontSize: '0.72rem', fontWeight: 700 }}>Concentrated</div>
+                <div style={{ color: C.muted, fontSize: '0.65rem', marginTop: '0.2rem' }}>Today</div>
+              </div>
+              <div style={{ flex: 1, height: 1, background: C.cardBorder }} />
+              <div style={{ textAlign: 'center', flex: '0 0 100px' }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.gold, margin: '0 auto 0.5rem' }} />
+                <div style={{ color: C.gold, fontSize: '0.72rem', fontWeight: 700 }}>Transitioning</div>
+                <div style={{ color: C.muted, fontSize: '0.65rem', marginTop: '0.2rem' }}>Years 1–{startYear}</div>
+              </div>
+              <div style={{ flex: 1, height: 1, background: C.cardBorder }} />
+              <div style={{ textAlign: 'center', flex: '0 0 90px' }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.green, margin: '0 auto 0.5rem' }} />
+                <div style={{ color: C.green, fontSize: '0.72rem', fontWeight: 700 }}>Diversified</div>
+                <div style={{ color: C.muted, fontSize: '0.65rem', marginTop: '0.2rem' }}>Year {endYear}+</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Explore tiles */}
+          <div style={{ borderTop: `1px solid ${C.cardBorder}`, paddingTop: '1.25rem', marginBottom: '1.5rem' }}>
+            <div style={{ color: C.muted, fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.875rem' }}>
+              From here, you can
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
+              <div style={{ background: C.surface, border: `1px solid ${C.cardBorder}`, borderRadius: '0.75rem', padding: '0.875rem' }}>
+                <div style={{ color: C.gold, fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem' }}>
+                  Historical simulation
+                </div>
+                <div style={{ color: C.muted, fontSize: '0.75rem', lineHeight: 1.55 }}>
+                  See how this strategy would have performed over the past decade.
+                </div>
+              </div>
+              <div style={{ background: C.surface, border: `1px solid ${C.cardBorder}`, borderRadius: '0.75rem', padding: '0.875rem' }}>
+                <div style={{ color: C.blue, fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem' }}>
+                  Long-term projections
+                </div>
+                <div style={{ color: C.muted, fontSize: '0.75rem', lineHeight: 1.55 }}>
+                  Monte Carlo paths showing your wealth journey over 5–30 years.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <button onClick={onBegin} style={{
+            background: C.gold, color: C.bg, border: 'none',
+            borderRadius: '0.75rem', padding: '0.875rem 2rem',
+            fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer',
+            width: '100%',
+          }}>
+            Begin my journey →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Typing indicator ─────────────────────────────────────
 function TypingDots() {
   return (
@@ -57,12 +217,21 @@ function OnboardingCard({ onSimulate, error }) {
   const [conversationId, setConversationId] = useState(null);
   const [isTyping, setIsTyping]       = useState(false);
   const [started, setStarted]         = useState(false);
+  const [planData, setPlanData]       = useState(null);
   const bottomRef                     = useRef(null);
+  const inputRef                      = useRef(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  // Keep focus in input after each reply lands
+  useEffect(() => {
+    if (started && !isTyping) {
+      inputRef.current?.focus();
+    }
+  }, [isTyping, started]);
 
   const sendMessage = async (text) => {
     if (!text.trim() || isTyping) return;
@@ -80,9 +249,9 @@ function OnboardingCard({ onSimulate, error }) {
       if (!conversationId) setConversationId(convId);
       setMessages(prev => [...prev, { role: 'assistant', content: data.agent_message, responseType: data.response_type }]);
 
-      // When chatbot has everything — kick off simulation
+      // When chatbot has everything — show the plan briefing screen
       if (data.response_type === 'summary' && data.payload) {
-        onSimulate(data.payload);
+        setPlanData(data.payload);
       }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.', responseType: 'error' }]);
@@ -95,6 +264,10 @@ function OnboardingCard({ onSimulate, error }) {
     setStarted(true);
     sendMessage('Hello');
   };
+
+  if (planData) {
+    return <PlanBriefingCard planData={planData} onBegin={() => onSimulate(planData)} />;
+  }
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
@@ -162,6 +335,7 @@ function OnboardingCard({ onSimulate, error }) {
             {/* Input bar */}
             <div style={{ padding: '1rem 1.5rem', borderTop: `1px solid ${C.cardBorder}`, display: 'flex', gap: '0.625rem' }}>
               <input
+                ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}

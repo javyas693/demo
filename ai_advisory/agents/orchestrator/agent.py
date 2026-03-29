@@ -297,17 +297,18 @@ class ChatSessionManager:
         """
 
         from google.genai import types
+        raw_response = ""  # guard against unbound if no text part in final event
         # Execute the agent step via ADK
         async for event in self.runner.run_async(
-            user_id=user_id, 
-            session_id=session_id, 
+            user_id=user_id,
+            session_id=session_id,
             new_message=types.Content(role="user", parts=[types.Part.from_text(text=message)])
         ):
             if event.is_final_response():
                 if event.content and event.content.parts:
                     raw_response = event.content.parts[0].text
-        # log the raw response
-        #print(f"Raw response: {raw_response}")
+        if not raw_response:
+            logger.warning("run_agent_turn: no text in final event for conversation %s", conversation_id)
         result_payload = self.parse_and_validate(raw_response, conversation_id)
         return result_payload, result_payload.response_type
 
