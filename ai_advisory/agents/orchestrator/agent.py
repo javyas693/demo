@@ -174,7 +174,7 @@ class ChatSessionManager:
         
         # Define the session manager using DatabaseSessionService (SQLite-backed)
         from ai_advisory.db.database import DB_PATH
-        self.session_service = DatabaseSessionService(f"sqlite:///{DB_PATH}")
+        self.session_service = DatabaseSessionService(f"sqlite+aiosqlite:///{DB_PATH}")
         
         # Define the ADK Runner to orchestrate the Agent with the Session
         self.runner = Runner(
