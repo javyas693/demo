@@ -727,7 +727,7 @@ export default function HomePage({
 }) {
   const [error, setError] = useState(null);
   const [userId] = useState(() => getOrCreateUserId());
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [, setCheckingSession] = useState(true);
 
   const hasSimulation = timeline && timeline.length > 0;
 
@@ -798,7 +798,6 @@ export default function HomePage({
   };
 
   if (!hasSimulation) {
-    if (checkingSession) return null; // wait for session check before showing onboarding
     return <OnboardingCard onSimulate={handleSimulate} error={error} userId={userId} />;
   }
 
