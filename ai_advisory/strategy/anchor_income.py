@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from ai_advisory.orchestration.trace_logger import trace_log
 
 @dataclass
@@ -16,6 +16,13 @@ class TickerSimInfo:
     inception_date: pd.Timestamp
 
 class AnchorIncomeEngine:
+    # Monthly yield rates for each income ETF (strategy engine owns this math)
+    MONTHLY_YIELDS: Dict[str, float] = {
+        "JEPQ": 0.0100,   # ~12% annual
+        "TLTW": 0.0150,   # ~18% annual
+        "SVOL": 0.0080,   # ~9.6% annual
+    }
+
     def __init__(
         self,
         start_date: str,
@@ -34,12 +41,32 @@ class AnchorIncomeEngine:
             "TLTW": TickerSimInfo("TLTW", "TLT", 0.60, 0.120, pd.to_datetime("2022-08-18")),
             "SVOL": TickerSimInfo("SVOL", "SPY", 0.81, 0.160, pd.to_datetime("2021-05-12")),
         }
-        
+
         self.parking_lot_target_weights = {
             "JEPQ": 0.70,
             "TLTW": 0.20,
             "SVOL": 0.10
         }
+
+    @classmethod
+    def compute_monthly_distributions(
+        cls,
+        income_holdings: Dict[str, float],
+        prices: Dict[str, float],
+    ) -> float:
+        """
+        Computes monthly income distributions from current holdings.
+
+        The income engine owns this yield math so the orchestrator and
+        time_simulator never have to hard-code yield rates.
+
+        All distributions are assumed reinvested (added to sleeve value, not cash).
+        Returns total distributions in dollars.
+        """
+        return sum(
+            float(income_holdings.get(t, 0)) * prices.get(t, 0.0) * y
+            for t, y in cls.MONTHLY_YIELDS.items()
+        )
 
     def _download_data(self) -> pd.DataFrame:
         all_tickers = ["JEPQ", "QQQ", "TLTW", "TLT", "SVOL", "SPY"]
@@ -95,7 +122,8 @@ class AnchorIncomeEngine:
             tickers_info=self.tickers_info,
             target_weights=self.parking_lot_target_weights,
             df_returns=df_returns,
-            qqq_drawdown=qqq_drawdown
+            qqq_drawdown=qqq_drawdown,
+            monthly_yields=AnchorIncomeEngine.MONTHLY_YIELDS,
         )
         
         self.events = result["events"]
@@ -109,13 +137,17 @@ def run_simulation(
     tickers_info: Dict[str, TickerSimInfo],
     target_weights: Dict[str, float],
     df_returns: pd.DataFrame,
-    qqq_drawdown: pd.Series
+    qqq_drawdown: pd.Series,
+    monthly_yields: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """
     Pure Function for running the Anchor Income simulation.
     All simulation variables are declared inside function scope.
     Constraint: Do NOT read from or write to any global state or persistent storage.
     """
+    if monthly_yields is None:
+        monthly_yields = {'JEPQ': 0.0100, 'TLTW': 0.0150, 'SVOL': 0.0080}
+
     # 2. THE "CLEAN SLATE" INITIALIZATION
     History_Log = []
     History_Log.append({
@@ -186,11 +218,9 @@ def run_simulation(
         
         # --- 2. Yield Calculation (Monthly) ---
         if i % 30 == 0:
-            MONTHLY_YIELDS = {'JEPQ': 0.0100, 'TLTW': 0.0150, 'SVOL': 0.0080}
-            
-            y_jepq = val_jepq * MONTHLY_YIELDS['JEPQ']
-            y_tltw = val_tltw * MONTHLY_YIELDS['TLTW']
-            y_svol = val_svol * MONTHLY_YIELDS['SVOL']
+            y_jepq = val_jepq * monthly_yields['JEPQ']
+            y_tltw = val_tltw * monthly_yields['TLTW']
+            y_svol = val_svol * monthly_yields['SVOL']
             
             cash_income = y_jepq + y_tltw + y_svol
             monthly_inc = cash_income  # plug into existing behavior
@@ -330,11 +360,10 @@ def run_simulation(
 
         cumulative_income_series[i] = current_cumulative_income_val
         withdrawn_income_series[i] = Total_Withdrawn
-    MONTHLY_YIELDS = {'JEPQ': 0.0100, 'TLTW': 0.0150, 'SVOL': 0.0080}
     _sleeve_vals = {'JEPQ': val_jepq, 'TLTW': val_tltw, 'SVOL': val_svol}
     cash_income_log = sum(
         _sleeve_vals.get(ticker, 0) * yield_rate
-        for ticker, yield_rate in MONTHLY_YIELDS.items()
+        for ticker, yield_rate in monthly_yields.items()
         if ticker in _sleeve_vals
     )
     sleeve_value_log = sum(

@@ -62,10 +62,13 @@ export default function App() {
     setTimelineSeries(timelineData.timeline_series);
     setMonthlyIntelligence(timelineData.monthly_intelligence || []);
     setMonthlyIntelligenceWhatif(null);
-    // Use mergedInputs when provided (chatbot flow) — inputs state hasn't
-    // updated yet at this point because setInputs is async.
-    setSimulatedInputs(mergedInputs ? { ...mergedInputs } : { ...inputs });
-    // Stay on home — the login card will now render with data
+    if (mergedInputs) {
+      // Chatbot/devBypass flow: sync both so Settings panel reflects the real position
+      setSimulatedInputs({ ...mergedInputs });
+      setInputs(prev => ({ ...prev, ...mergedInputs }));
+    } else {
+      setSimulatedInputs({ ...inputs });
+    }
   };
 
   const isHomePage = activePage === 'home';

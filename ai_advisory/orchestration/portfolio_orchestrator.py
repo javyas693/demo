@@ -25,6 +25,7 @@ Orchestrator step sequence (every cycle):
 from __future__ import annotations
 
 import copy
+import math
 from datetime import datetime, date as _date
 from typing import Any, Dict, List, Optional
 
@@ -451,6 +452,27 @@ def run_portfolio_cycle(
     # 8. Route released capital → income / model sleeves
     # ------------------------------------------------------------------
     available_capital = state.cash + proceeds_from_sales + option_income_this_step
+
+    # If covered call losses drive cash negative, sell CP shares to cover the shortfall.
+    if available_capital < 0 and current_price > 0:
+        shortfall           = -available_capital
+        remaining_cp_shares = int(state.shares) - shares_sold
+        emergency_shares    = min(remaining_cp_shares, math.ceil(shortfall / current_price))
+        if emergency_shares > 0:
+            emergency_proceeds  = emergency_shares * current_price
+            shares_sold        += emergency_shares
+            proceeds_from_sales += emergency_proceeds
+            available_capital   += emergency_proceeds
+            trades.append({
+                "symbol":         ticker,
+                "side":           "SELL",
+                "quantity":       emergency_shares,
+                "price_override": current_price,
+            })
+            trace_log(f"[CASH SHORTFALL] option loss ${shortfall:,.0f} covered by selling "
+                      f"{emergency_shares} CP shares @ ${current_price:.2f} = ${emergency_proceeds:,.0f}")
+
+    available_capital = max(0.0, available_capital)  # floor if insufficient CP shares to fully cover
     allocs            = orch.determine_allocations(available_capital)
 
     requested_total = allocs["income"] + allocs["model"]
@@ -489,6 +511,15 @@ def run_portfolio_cycle(
                     "side":     "BUY",
                     "quantity": (allocs["income"] * w) / prices[t],
                 })
+
+    # ------------------------------------------------------------------
+    # 9a. Income engine computes monthly distributions from prior holdings
+    # ------------------------------------------------------------------
+    # AnchorIncomeEngine owns the yield math; orchestrator delegates.
+    # Distributions are reinvested (added to sleeve value, not taken as cash).
+    monthly_income_distributions = AnchorIncomeEngine.compute_monthly_distributions(
+        state.income_holdings, prices
+    )
 
     # ------------------------------------------------------------------
     # 9b. Emit buy intents — model portfolio sleeve
@@ -556,6 +587,9 @@ def run_portfolio_cycle(
         "ledger_snapshot": ledger_snapshot,
         "option_income":   option_income_this_step,
         "option_pnl":      cp_summary.get("net_option_result", 0.0),
+
+        # AnchorIncomeEngine computed this — orchestrator just passes it through
+        "monthly_income_distributions": monthly_income_distributions,
     }
 
     return {

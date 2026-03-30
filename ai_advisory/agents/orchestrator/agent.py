@@ -21,7 +21,7 @@ checks state and decides the next step.
 """
 
 from google.adk.agents import Agent
-from google.adk.sessions import InMemorySessionService
+from google.adk.sessions import DatabaseSessionService
 from google.adk import Runner
 from google.genai import types
 from google.adk.models.anthropic_llm import AnthropicLlm
@@ -172,8 +172,9 @@ class ChatSessionManager:
             )
         )
         
-        # Define the session manager using InMemorySessionService
-        self.session_service = InMemorySessionService()
+        # Define the session manager using DatabaseSessionService (SQLite-backed)
+        from ai_advisory.db.database import DB_PATH
+        self.session_service = DatabaseSessionService(f"sqlite:///{DB_PATH}")
         
         # Define the ADK Runner to orchestrate the Agent with the Session
         self.runner = Runner(
@@ -394,7 +395,9 @@ class ChatSessionManager:
                 )
 
         except Exception as e:
-            print("Error running agent for conversation %s", conversation_id)
+            import traceback
+            tb = traceback.format_exc()
+            logger.error("AGENT CRASH for conversation %s: %s: %s\n%s", conversation_id, type(e).__name__, e, tb)
             latency_ms = int((time.time() - start_time) * 1000)
             return AgentResponseEnvelope(
                 conversation_id=conversation_id,

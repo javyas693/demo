@@ -211,7 +211,7 @@ function TypingDots() {
 }
 
 // ── Chat onboarding card ──────────────────────────────────
-function OnboardingCard({ onSimulate, error }) {
+function OnboardingCard({ onSimulate, error, userId }) {
   const [messages, setMessages]       = useState([]);
   const [input, setInput]             = useState('');
   const [conversationId, setConversationId] = useState(null);
@@ -242,7 +242,7 @@ function OnboardingCard({ onSimulate, error }) {
       const res = await fetch('http://localhost:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, conversation_id: conversationId }),
+        body: JSON.stringify({ message: text, conversation_id: conversationId, user_id: userId }),
       });
       const data = await res.json();
       const convId = data.conversation_id || conversationId;
@@ -263,6 +263,22 @@ function OnboardingCard({ onSimulate, error }) {
   const handleStart = () => {
     setStarted(true);
     sendMessage('Hello');
+  };
+
+  const handleDevBypass = () => {
+    const devPayload = {
+      position_ticker: 'TSLA',
+      position_lots: [{
+        lot_id: 'lot_1', ticker: 'TSLA', shares: 4000,
+        cost_basis: 145.00, acquisition_date: '2022-03-01',
+      }],
+      risk_score_final: 65,
+      starting_cash: 50000,
+      horizon_years: 5,
+      tlh_inventory: 0,
+      user_name: 'Dev',
+    };
+    onSimulate(devPayload);
   };
 
   if (planData) {
@@ -300,6 +316,14 @@ function OnboardingCard({ onSimulate, error }) {
               width: '100%', transition: 'opacity 0.2s',
             }}>
               Get started →
+            </button>
+            <button onClick={handleDevBypass} style={{
+              background: 'transparent', color: C.muted,
+              border: `1px solid ${C.cardBorder}`, borderRadius: '0.75rem',
+              padding: '0.5rem 1rem', fontWeight: 600, fontSize: '0.75rem',
+              cursor: 'pointer', marginTop: '0.75rem', width: '100%',
+            }}>
+              Skip (dev · TSLA 4000 shares)
             </button>
           </div>
         ) : (
@@ -686,14 +710,41 @@ function ActIII({ onNavigate }) {
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────
+function getOrCreateUserId() {
+  let id = localStorage.getItem('advisory_user_id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('advisory_user_id', id);
+  }
+  return id;
+}
+
 // ── Export ───────────────────────────────────────────────
 export default function HomePage({
   timeline, monthlyIntelligence, simulatedInputs,
   inputs, setInputs, onSimulationComplete, onNavigate,
 }) {
   const [error, setError] = useState(null);
+  const [userId] = useState(() => getOrCreateUserId());
+  const [checkingSession, setCheckingSession] = useState(true);
 
   const hasSimulation = timeline && timeline.length > 0;
+
+  // On mount: check if this browser already completed onboarding.
+  // If so, restore the session state and run the simulation automatically.
+  useEffect(() => {
+    fetch(`http://localhost:8000/session/status?user_id=${userId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.onboarding_complete && data.state && !hasSimulation) {
+          handleSimulate(data.state);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCheckingSession(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const handleSimulate = async (chatPayload) => {
     setError(null);
@@ -747,7 +798,8 @@ export default function HomePage({
   };
 
   if (!hasSimulation) {
-    return <OnboardingCard onSimulate={handleSimulate} error={error} />;
+    if (checkingSession) return null; // wait for session check before showing onboarding
+    return <OnboardingCard onSimulate={handleSimulate} error={error} userId={userId} />;
   }
 
   return (

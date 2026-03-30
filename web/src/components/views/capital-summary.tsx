@@ -4,6 +4,7 @@ import * as React from "react"
 import { Target, TrendingUp, Activity, Layers, AlertTriangle, ShieldCheck, Sparkles } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 import { capitalSummary, signals, CapitalSummary as CapitalSummaryType, ProgramSignal } from "@/lib/api"
 
@@ -184,6 +185,18 @@ export function CapitalSummary({ onSelectProgram }: { onSelectProgram: (p: strin
                             <p className="text-sm text-zinc-500 dark:text-zinc-400">Yield-focused diversified portfolio construction.</p>
                         </CardContent>
                     </Card>
+
+                    <Link href="/strategies" className="col-span-1 md:col-span-2">
+                        <Card className="cursor-pointer hover:shadow-md transition-shadow border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20">
+                            <CardContent className="p-6 flex items-center justify-between">
+                                <div className="space-y-1">
+                                    <h3 className="font-medium text-indigo-900 dark:text-indigo-100">Strategy Lab</h3>
+                                    <p className="text-sm text-indigo-600/70 dark:text-indigo-400/70">Run and compare all three strategy engines — CP, Model Portfolio, and Anchor Income.</p>
+                                </div>
+                                <span className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 rounded-full whitespace-nowrap ml-4">Open Lab →</span>
+                            </CardContent>
+                        </Card>
+                    </Link>
 
                 </div>
             </div>

@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from typing import Dict, Any
+from ai_advisory.orchestration.trace_logger import trace_log
 
 def run_mp_backtest(target_weights: Dict[str, float], initial_capital: float, start_date: str, end_date: str) -> Dict[str, Any]:
     """
@@ -123,28 +124,28 @@ def run_mp_backtest(target_weights: Dict[str, float], initial_capital: float, st
         # Terminal Proof (First Month Only)
         if not has_printed_reconciliation and len(valid_assets) > 0:
             has_printed_reconciliation = True
-            print("\n" + "="*50)
-            print("=== MP MATHEMATICAL RECONCILIATION BLOCK ===")
-            print(f"Month: {date.strftime('%Y-%m')}")
-            print(f"Starting Capital: ${portfolio_values[-2]:,.2f}")
-            
+            trace_log("\n" + "="*50)
+            trace_log("=== MP MATHEMATICAL RECONCILIATION BLOCK ===")
+            trace_log(f"Month: {date.strftime('%Y-%m')}")
+            trace_log(f"Starting Capital: ${portfolio_values[-2]:,.2f}")
+
             sum_of_assets = 0.0
             for a in audit_assets:
                 asset_end_val = a['shares_held'] * a['ticker_end_price']
                 sum_of_assets += asset_end_val
-                print(f" - {a['ticker']}: {a['shares_held']:,.4f} shares * ${a['ticker_end_price']:,.2f} = ${asset_end_val:,.2f}")
-            
-            print("-" * 50)
-            print(f"Sum of Assets:      ${sum_of_assets:,.2f}")
-            print(f"Geometric PV Math:  ${portfolio_value:,.2f}")
+                trace_log(f" - {a['ticker']}: {a['shares_held']:,.4f} shares * ${a['ticker_end_price']:,.2f} = ${asset_end_val:,.2f}")
+
+            trace_log("-" * 50)
+            trace_log(f"Sum of Assets:      ${sum_of_assets:,.2f}")
+            trace_log(f"Geometric PV Math:  ${portfolio_value:,.2f}")
             diff = abs(sum_of_assets - portfolio_value)
-            print(f"Absolute Delta:     ${diff:,.4f}")
-            
+            trace_log(f"Absolute Delta:     ${diff:,.4f}")
+
             if diff > 0.01:
-                print(f"WARNING: RECONCILIATION FAILED. DELTA EXCEEDS $0.01")
+                trace_log(f"WARNING: RECONCILIATION FAILED. DELTA EXCEEDS $0.01")
             else:
-                print("STATUS: VERIFIED (Sum of Assets = Total Value)")
-            print("="*50 + "\n")
+                trace_log("STATUS: VERIFIED (Sum of Assets = Total Value)")
+            trace_log("="*50 + "\n")
         
         # Identity top holding by value post-return
         top_holding = max(month_end_values, key=month_end_values.get) if month_end_values else "N/A"

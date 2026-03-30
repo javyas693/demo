@@ -38,9 +38,9 @@ def save_position_data_and_escalate(
     lots: list[dict],
     has_concentrated_position: bool,
     starting_cash: float,
-    horizon_years: int,
-    tlh_inventory: float,
     tool_context: ToolContext,
+    horizon_years: int = 5,
+    tlh_inventory: float = 0.0,
 ) -> dict:
     """
     Saves the collected concentrated position data to session state

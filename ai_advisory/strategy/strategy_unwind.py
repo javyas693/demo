@@ -211,6 +211,42 @@ class StrategyUnwindEngine:
         return max(float(S) * math.exp(-(d1 * sigma * math.sqrt(T) - (r + 0.5 * sigma * sigma) * T)), 0.01)
 
     # ------------------------------------------------------------------
+    # Standalone simulate
+    # ------------------------------------------------------------------
+
+    def simulate(
+        self,
+        coverage_pct: float = 50.0,
+        target_dte_days: int = 30,
+        target_delta: float = 0.20,
+        profit_capture_pct: float = 0.50,
+        stop_loss_multiple: float = 1.00,
+        cost_basis: Optional[float] = None,
+        wash_sale_cooldown_days: int = 0,
+    ) -> Dict[str, Any]:
+        """Standalone simulate — mirrors run_strategy_comparison as a class method."""
+        options_ledger = OptionsLedger(underlying=self.ticker)
+        baseline = self.run_baseline()
+        overlay = self.run_covered_call_overlay(
+            options_ledger=options_ledger,
+            coverage_pct=coverage_pct,
+            target_dte_days=target_dte_days,
+            target_delta=target_delta,
+            profit_capture_pct=profit_capture_pct,
+            stop_loss_multiple=stop_loss_multiple,
+            cost_basis=cost_basis,
+            wash_sale_cooldown_days=wash_sale_cooldown_days,
+        )
+        overlay.get("summary", {})["__engine_version__"] = "V2_DECISION_SERVICE_DECOUPLED"
+        return {
+            "baseline": baseline,
+            "overlay": overlay,
+            "ticker": self.ticker,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+        }
+
+    # ------------------------------------------------------------------
     # Baseline
     # ------------------------------------------------------------------
 

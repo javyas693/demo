@@ -61,10 +61,11 @@ export default function StrategyAttributionPanel({ frame, baseFrame }) {
 
           <Row label="Capital Deployed"   value={$(incomeDeployed)}              accent="text-amber-700" />
           <Row label="Holdings Value"     value={$(incomeTotal)}                 accent="text-amber-900" />
+          <div className="text-[9px] text-slate-400 pl-1 -mt-1 mb-1">market value + reinvested distributions</div>
           <Row label="Unrealized P&L"     value={signed(incomePnL)}              accent={incomePnL >= 0 ? 'text-emerald-600' : 'text-red-500'} />
 
           <div className={`mt-2 px-2 py-1.5 rounded text-[10px] font-mono ${Math.abs(incomeDeployed + incomePnL - incomeTotal) < 5 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-            {$(incomeDeployed)} deployed {incomePnL >= 0 ? '+' : '−'} {$(Math.abs(incomePnL))} P&L = {$(incomeTotal)} ✓
+            {$(incomeDeployed)} deployed + {incomePnL >= 0 ? '+' : ''}{incomePnL.toLocaleString(undefined, {maximumFractionDigits: 0})} P&L = {$(incomeTotal)} ✓
           </div>
 
           <div className="mt-3 space-y-0.5">
@@ -84,7 +85,7 @@ export default function StrategyAttributionPanel({ frame, baseFrame }) {
           <Row label="Unrealized P&L"     value={signed(modelPnL)}               accent={modelPnL >= 0 ? 'text-emerald-600' : 'text-red-500'} />
 
           <div className={`mt-2 px-2 py-1.5 rounded text-[10px] font-mono ${Math.abs(modelDeployed + modelPnL - modelTotal) < 5 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-            {$(modelDeployed)} deployed {modelPnL >= 0 ? '+' : '−'} {$(Math.abs(modelPnL))} P&L = {$(modelTotal)} ✓
+            {$(modelDeployed)} deployed + {modelPnL >= 0 ? '+' : ''}{modelPnL.toLocaleString(undefined, {maximumFractionDigits: 0})} P&L = {$(modelTotal)} ✓
           </div>
 
           <div className="mt-3 space-y-0.5">

@@ -14,7 +14,8 @@ from ai_advisory.data.spy_loader import load_spy_prices, get_spy_price_on_or_bef
 # ─────────────────────────────────────────────────────────
 # Strategy Engine Constants
 # ─────────────────────────────────────────────────────────
-INCOME_YIELD_ANNUAL = 0.06   # 6% annual yield target on income portfolio
+# Blended annual yield matches AnchorIncomeEngine: JEPQ 70%×12% + TLTW 20%×18% + SVOL 10%×9.6%
+INCOME_YIELD_ANNUAL = 0.1296
 
 _YF_CACHE = {}
 
@@ -326,16 +327,21 @@ def simulate_portfolio(
                 current_prices[t] = p
                 trace_log(f"[PRICE SOURCE]\nMonth: {month}\nSymbol: {t} price: {p}")
 
-        # ── STEP 4: Revalue holdings ──────────────────────────────────
-        new_income_value = sum(
+        # ── STEP 4: Advance holdings to new prices (time_simulator's job) ───
+        new_income_value_price = sum(
             qty * current_prices.get(t, 0.0) for t, qty in delta_income_holdings.items()
         )
         new_model_value = sum(
             qty * current_prices.get(t, 0.0) for t, qty in delta_model_holdings.items()
         )
 
-        income_generated = new_income_value - (current_state.income_value + to_income)
-        model_growth     = new_model_value  - (current_state.model_value  + to_model)
+        # Income distributions: AnchorIncomeEngine computed this, orchestrator forwarded it.
+        # Distributions are reinvested — they grow the sleeve value without a cash flow.
+        monthly_income_distributions = res_summary.get("monthly_income_distributions", 0.0)
+        new_income_value = new_income_value_price + monthly_income_distributions
+
+        income_generated = monthly_income_distributions   # income = what the strategy paid out
+        model_growth     = new_model_value - (current_state.model_value + to_model)
 
         cumulative_income_generated += income_generated
         cumulative_model_growth     += model_growth

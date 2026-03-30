@@ -941,6 +941,7 @@ def health():
 
 class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
+    user_id: Optional[str] = None
     message: str
 import traceback # Make sure this is at the very top of your server.py file!
 
@@ -955,27 +956,63 @@ async def chat_endpoint(request: ChatRequest):
             "message": "Chatbot disabled (test/dev mode)"
         }
 
-    conversation_id = request.conversation_id
-    
-    if not conversation_id:
-        conversation_id = str(uuid.uuid4())
-        
+    # Use user_id as the session key when provided (persistent sessions).
+    # Fall back to conversation_id or a new UUID for legacy/anonymous callers.
+    user_id = request.user_id or "web-user"
+    conversation_id = request.conversation_id or user_id or str(uuid.uuid4())
+
     try:
-        # This is where the magic (and currently the crash) happens
         agent_response = await session_manager.send_message(
             message=request.message,
             conversation_id=conversation_id,
-            user_id="web-user"
+            user_id=user_id,
         )
-        
+
         return agent_response
     except Exception as e:
-        # THIS IS THE KEY: It prints the 'Internal' error to your terminal
         print("❌ AGENT CRASH DETECTED:")
-        traceback.print_exc() 
-        
-        # This still sends the 500 to the browser
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+
+
+@app.get("/session/status")
+async def session_status(user_id: str):
+    """
+    Returns the onboarding state for a given user_id (localStorage UUID).
+    The frontend calls this on load to detect returning users.
+    """
+    if not USE_LLM:
+        return {"onboarding_complete": False}
+
+    try:
+        assert session_manager is not None
+        _APP_NAME = "financial-ai-assistamt"
+        session = await session_manager.session_service.get_session(
+            session_id=user_id,
+            app_name=_APP_NAME,
+            user_id=user_id,
+        )
+        if not session or not session.state:
+            return {"onboarding_complete": False}
+
+        st = session.state
+        complete = bool(st.get("risk_assessment_complete") and st.get("position_data_complete"))
+        return {
+            "onboarding_complete": complete,
+            "conversation_id": user_id,
+            "state": {
+                "position_ticker":  st.get("position_ticker"),
+                "position_lots":    st.get("position_lots"),
+                "starting_cash":    st.get("starting_cash"),
+                "risk_score_final": st.get("risk_score_final"),
+                "user_name":        st.get("user_name"),
+                "horizon_years":    st.get("horizon_years"),
+                "tlh_inventory":    st.get("tlh_inventory", 0.0),
+            } if complete else {},
+        }
+    except Exception as e:
+        print(f"⚠️  session_status error for user_id={user_id}: {e}")
+        return {"onboarding_complete": False}
 
 @app.post("/risk/score")
 def risk_score(payload: dict):

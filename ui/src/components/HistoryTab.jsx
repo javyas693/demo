@@ -69,22 +69,23 @@ export default function HistoryTab({ timeline, timelineSeries, monthlyIntelligen
     );
   }
 
+  const safeIndex  = Math.min(currentIndex, timeline.length - 1);
   const baseState  = timeline[0];
-  const state      = timeline[currentIndex];
-  const intel      = monthlyIntelligence?.[currentIndex - 1] || null;
+  const state      = timeline[safeIndex];
+  const intel      = monthlyIntelligence?.[safeIndex - 1] || null;
   const horizonMonths = (inputs?.horizon_years || 1) * 12;
 
   const portfolioDelta = state.total_portfolio_value - baseState.total_portfolio_value;
 
   const dynamicSummary = {
-    capital_released:      timeline.slice(0, currentIndex + 1).reduce((s, f) => s + (f.capital_released_this_step || 0), 0),
-    allocation_to_income:  timeline.slice(0, currentIndex + 1).reduce((s, f) => s + (f.allocation_to_income_this_step || 0), 0),
-    allocation_to_model:   timeline.slice(0, currentIndex + 1).reduce((s, f) => s + (f.allocation_to_model_this_step || 0), 0),
+    capital_released:      timeline.slice(0, safeIndex + 1).reduce((s, f) => s + (f.capital_released_this_step || 0), 0),
+    allocation_to_income:  timeline.slice(0, safeIndex + 1).reduce((s, f) => s + (f.allocation_to_income_this_step || 0), 0),
+    allocation_to_model:   timeline.slice(0, safeIndex + 1).reduce((s, f) => s + (f.allocation_to_model_this_step || 0), 0),
     true_final_ecosystem_value: state.total_portfolio_value,
   };
 
   const monthSummary = {
-    month:            state.month || currentIndex,
+    month:            state.month || safeIndex,
     shares_sold:      state.strategies?.concentrated?.shares_sold || 0,
     capital_released: state.capital_released_this_step || 0,
     to_income:        state.allocation_to_income_this_step || 0,
@@ -128,7 +129,7 @@ export default function HistoryTab({ timeline, timelineSeries, monthlyIntelligen
           <div className="flex justify-between text-xs text-slate-400 font-bold mb-2 uppercase tracking-wider">
             <span>Start</span>
             <span className="text-blue-600 px-3 py-1 bg-blue-50 rounded-full">
-              Month {state.month || currentIndex} of {horizonMonths}
+              Month {state.month || safeIndex} of {horizonMonths}
             </span>
             <span>{inputs?.horizon_years || 1}yr horizon</span>
           </div>
