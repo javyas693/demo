@@ -166,10 +166,10 @@ class ChatSessionManager:
                 # Future: income_strategy_gatherer,
             ],
             tools=[],
-            model=self.model,
-            generate_content_config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
+            model= "gemini-2.5-flash", #self.model,
+            #generate_content_config=types.GenerateContentConfig(
+            #    response_mime_type="application/json"
+            #)
         )
         
         # Define the session manager using DatabaseSessionService (SQLite-backed)

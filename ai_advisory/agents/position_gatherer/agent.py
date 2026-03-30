@@ -205,7 +205,7 @@ will now analyze their options.
 
 position_gatherer_agent = Agent(
     name="position_gatherer",
-    model=AnthropicLlm(model="claude-sonnet-4-6", max_tokens=8192, temperature=0),
+    model="gemini-2.5-flash",#AnthropicLlm(model="claude-sonnet-4-6", max_tokens=8192, temperature=0),
     description=(
         "Collects detailed information about a user's concentrated stock position "
         "through multi-turn conversation. Gathers ticker, lot details (shares, "

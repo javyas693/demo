@@ -181,7 +181,7 @@ Include the exact tool output as risk_score_result in the payload.
 
 risk_assessor_agent = Agent(
     name="risk_assessor",
-    model=AnthropicLlm(model="claude-sonnet-4-6", max_tokens=8192, temperature=0),
+    model= "gemini-2.5-flash",#AnthropicLlm(model="claude-sonnet-4-6", max_tokens=8192, temperature=0),
     description=(
         "First point of contact for the financial advisor. Welcomes the user, "
         "conducts a multi-turn risk assessment (3 questions), maps answers to "

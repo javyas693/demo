@@ -1,54 +1,58 @@
-2026-03-28 11:22:23,372 | HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-03-28 11:22:23,405 | Received response from Claude.
-2026-03-28 11:22:23,430 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:22:25,513 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:22:25,518 | Response received from the model.
-2026-03-28 11:22:37,702 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:22:40,052 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:22:40,057 | Response received from the model.
-2026-03-28 11:22:52,197 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:22:54,695 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:22:54,700 | Response received from the model.
-2026-03-28 11:23:00,275 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:03,295 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:03,301 | Response received from the model.
-2026-03-28 11:23:11,779 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:13,332 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:13,337 | Response received from the model.
-2026-03-28 11:23:13,337 | Warning: there are non-text parts in the response: ['function_call'], returning concatenated text result from text parts. Check the full candidates.content.parts accessor to get the full model response.
-2026-03-28 11:23:13,367 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:14,868 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:14,873 | Response received from the model.
-2026-03-28 11:23:14,876 | Auto-chaining from risk_score_complete (depth 1) for conversation 493ab0b9-4d40-422d-bc85-6543b0a02ed3
-2026-03-28 11:23:14,905 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:16,402 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:16,408 | Response received from the model.
-2026-03-28 11:23:19,066 | HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-03-28 11:23:19,068 | Received response from Claude.
-2026-03-28 11:23:19,100 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:20,973 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:20,976 | Response received from the model.
-2026-03-28 11:23:30,386 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:32,277 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:32,282 | Response received from the model.
-2026-03-28 11:23:49,696 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:51,836 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:51,841 | Response received from the model.
-2026-03-28 11:23:57,112 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:23:58,875 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:23:58,880 | Response received from the model.
-2026-03-28 11:24:02,868 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:24:04,720 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:24:04,725 | Response received from the model.
-2026-03-28 11:24:11,061 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:24:13,033 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:24:13,037 | Response received from the model.
-2026-03-28 11:24:13,071 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:24:14,363 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:24:14,367 | Response received from the model.
-2026-03-28 11:24:14,371 | Auto-chaining from position_confirmed (depth 1) for conversation 493ab0b9-4d40-422d-bc85-6543b0a02ed3
-2026-03-28 11:24:14,401 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
-2026-03-28 11:24:15,694 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-03-28 11:24:15,700 | Response received from the model.
-2026-03-28 11:24:25,116 | HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-03-28 11:24:25,118 | Received response from Claude.
+2026-03-30 12:41:04,965 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:41:06,206 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:41:06,210 | Response received from the model.
+2026-03-30 12:41:06,210 | Warning: there are non-text parts in the response: ['function_call'], returning concatenated text result from text parts. Check the full candidates.content.parts accessor to get the full model response.
+2026-03-30 12:41:06,230 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:41:08,564 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:41:08,569 | Response received from the model.
+2026-03-30 12:41:45,404 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:41:48,316 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:41:48,321 | Response received from the model.
+2026-03-30 12:42:11,202 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:42:14,096 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:42:14,099 | Response received from the model.
+2026-03-30 12:42:26,595 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:42:29,770 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:42:29,777 | Response received from the model.
+2026-03-30 12:42:39,914 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:42:41,517 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:42:41,519 | Response received from the model.
+2026-03-30 12:42:41,535 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:42:43,383 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:42:43,385 | Response received from the model.
+2026-03-30 12:42:43,386 | Auto-chaining from risk_score_complete (depth 1) for conversation be172aab-4d3f-48d7-a03e-bc58d21453e7
+2026-03-30 12:42:43,402 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:42:44,513 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:42:44,521 | Response received from the model.
+2026-03-30 12:42:44,550 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:42:47,070 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:42:47,074 | Response received from the model.
+2026-03-30 12:42:47,098 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:42:49,527 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:42:49,529 | Response received from the model.
+2026-03-30 12:43:09,549 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:43:11,339 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:43:11,341 | Response received from the model.
+2026-03-30 12:43:32,624 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:43:34,919 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:43:34,924 | Response received from the model.
+2026-03-30 12:43:47,396 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:43:49,536 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:43:49,541 | Response received from the model.
+2026-03-30 12:43:58,689 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:44:00,698 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:44:00,700 | Response received from the model.
+2026-03-30 12:44:08,976 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:44:10,527 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:44:10,530 | Response received from the model.
+2026-03-30 12:44:10,556 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:44:12,065 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:44:12,068 | Response received from the model.
+2026-03-30 12:44:12,069 | Auto-chaining from position_confirmed (depth 1) for conversation be172aab-4d3f-48d7-a03e-bc58d21453e7
+2026-03-30 12:44:12,090 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:44:13,398 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:44:13,400 | Response received from the model.
+2026-03-30 12:44:13,420 | Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2026-03-30 12:44:16,096 | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-30 12:44:16,098 | Response received from the model.
+2026-03-30 12:44:16,105 | Enriched summary payload from state: ticker=WMT lots=1 cash=10000 risk=75.1
